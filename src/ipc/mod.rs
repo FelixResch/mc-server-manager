@@ -1,6 +1,6 @@
+use crate::ServerInfo;
 use ipc_channel::ipc::IpcSender;
 use semver::Version;
-use crate::ServerInfo;
 
 #[derive(Serialize, Debug, Deserialize)]
 pub enum DaemonCmd {
@@ -21,33 +21,19 @@ pub enum DaemonCmd {
     SubscribeEvent {
         event_type: ServerEventType,
         server_ids: Option<Vec<String>>,
-    }
+    },
 }
 
 #[derive(Serialize, Debug, Deserialize)]
 pub enum DaemonResponse {
-    List {
-        servers: Vec<ServerInfo>,
-    },
+    List { servers: Vec<ServerInfo> },
     UnknownCommand,
-    Version {
-        version: Version,
-    },
-    SetSender {
-        sender: IpcSender<DaemonCmd>,
-    },
-    ServerNotFound {
-        server_id: String,
-    },
-    ServerStarted {
-        server_id: String,
-    },
-    ServerStopped {
-        server_id: String,
-    },
-    ServerEvent {
-        event: ServerEvent,
-    },
+    Version { version: Version },
+    SetSender { sender: IpcSender<DaemonCmd> },
+    ServerNotFound { server_id: String },
+    ServerStarted { server_id: String },
+    ServerStopped { server_id: String },
+    ServerEvent { event: ServerEvent },
     Ok,
 }
 
@@ -61,22 +47,13 @@ pub struct NewConnection {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ServerEvent {
-    ServerStarting {
-        server_id: String,
-    },
-    ServerStarted {
-        server_id: String,
-    },
-    ServerStopping {
-        server_id: String,
-    },
-    ServerStopped {
-        server_id: String,
-    },
+    ServerStarting { server_id: String },
+    ServerStarted { server_id: String },
+    ServerStopping { server_id: String },
+    ServerStopped { server_id: String },
 }
 
 impl ServerEvent {
-
     pub fn get_event_type(&self) -> ServerEventType {
         match self {
             ServerEvent::ServerStarting { .. } => ServerEventType::ServerStarting,

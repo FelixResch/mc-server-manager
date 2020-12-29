@@ -1,12 +1,12 @@
-pub mod paper;
 pub mod basic_log;
 pub mod event;
+pub mod paper;
 
-use std::process::{Child, ChildStdout};
+use crate::ipc::{DaemonCmd, ServerEvent};
 use crate::ServerType;
 use semver::Version;
-use std::sync::{RwLock, Arc};
-use crate::ipc::{DaemonCmd, ServerEvent};
+use std::process::{Child, ChildStdout};
+use std::sync::{Arc, RwLock};
 
 pub trait Server {
     fn spawn(&mut self, log_service: &mut dyn LogService) -> (Child, Arc<RwLock<OutputState>>);
@@ -30,19 +30,10 @@ pub enum OutputState {
 }
 
 pub trait LogService {
-
     fn manage_output(&mut self, out: ChildStdout, server_name: String) -> Arc<RwLock<OutputState>>;
 }
 
-
 pub enum DaemonEvent {
-    IncomingCmd {
-        id: u32,
-        cmd: DaemonCmd,
-    },
-    SendEvent {
-        client_id: u32,
-        event: ServerEvent,
-    }
+    IncomingCmd { id: u32, cmd: DaemonCmd },
+    SendEvent { client_id: u32, event: ServerEvent },
 }
-

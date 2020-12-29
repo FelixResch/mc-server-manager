@@ -1,10 +1,10 @@
+use crate::daemon::paper::PaperServer;
+use crate::daemon::Server;
 use semver::Version;
-use std::path::Path;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
-use std::collections::HashMap;
-use crate::daemon::Server;
-use crate::daemon::paper::PaperServer;
+use std::path::Path;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DaemonConfig {
@@ -16,7 +16,7 @@ pub struct DaemonConfig {
 pub struct ServerConfig {
     pub name: String,
     pub path: Box<Path>,
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     pub type_name: String,
     pub jar: String,
     pub version: Version,
@@ -24,7 +24,6 @@ pub struct ServerConfig {
 }
 
 impl DaemonConfig {
-
     pub fn load(path: &Path) -> DaemonConfig {
         let mut file = File::open(path).unwrap();
         let mut content = String::new();
@@ -34,11 +33,15 @@ impl DaemonConfig {
     }
 
     pub fn create_servers(&self) -> HashMap<String, Box<dyn Server + Send>> {
-        let mut map: HashMap<_, Box<dyn Server + Send>> = HashMap::with_capacity(self.servers.len());
+        let mut map: HashMap<_, Box<dyn Server + Send>> =
+            HashMap::with_capacity(self.servers.len());
         for server in &self.servers {
             match server.type_name.as_ref() {
                 "paper" => {
-                    map.insert(server.id.clone(), Box::new(PaperServer::create(server.clone())));
+                    map.insert(
+                        server.id.clone(),
+                        Box::new(PaperServer::create(server.clone())),
+                    );
                 }
                 other => {
                     println!("unsupported server type: {}", other)

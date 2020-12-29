@@ -1,19 +1,19 @@
 #![warn(clippy::unwrap_used)]
-pub mod ipc;
 pub mod config;
 pub mod daemon;
+pub mod ipc;
 
 #[macro_use]
 extern crate serde_derive;
 
-use std::fmt::Display;
-use serde::export::Formatter;
 use semver::Version;
+use serde::export::Formatter;
+use std::fmt::Display;
 
 pub mod fs {
-    use std::fs::{File, remove_file};
+    use std::fs::{remove_file, File};
+    use std::io::{Read, Write};
     use std::path::Path;
-    use std::io::{Write, Read};
 
     pub fn get_socket_name() -> String {
         let path = Path::new(".mcman.socket");

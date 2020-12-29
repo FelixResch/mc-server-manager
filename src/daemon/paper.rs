@@ -1,10 +1,10 @@
-use crate::daemon::{Server, LogService, OutputState};
 use crate::config::ServerConfig;
+use crate::daemon::{LogService, OutputState, Server};
 use crate::ServerType;
-use std::process::{Child, ChildStdin, Command, Stdio};
 use semver::Version;
-use std::sync::{Arc, RwLock};
 use std::io::Write;
+use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::{Arc, RwLock};
 
 pub struct PaperServer {
     config: ServerConfig,
@@ -12,7 +12,6 @@ pub struct PaperServer {
 }
 
 impl Server for PaperServer {
-
     fn spawn(&mut self, log_service: &mut dyn LogService) -> (Child, Arc<RwLock<OutputState>>) {
         let mut child = Command::new("java".to_string())
             .arg("-jar")
@@ -22,7 +21,9 @@ impl Server for PaperServer {
             .arg(&self.config.name)
             .current_dir(&self.config.path)
             .stdout(Stdio::piped())
-            .stdin(Stdio::piped()).spawn().unwrap();
+            .stdin(Stdio::piped())
+            .spawn()
+            .unwrap();
         let output = child.stdout.take();
         self.input = child.stdin.take();
 

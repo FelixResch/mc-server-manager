@@ -1,3 +1,4 @@
+#![warn(clippy::unwrap_used)]
 pub mod ipc;
 pub mod config;
 pub mod daemon;
@@ -19,7 +20,7 @@ pub mod fs {
         let mut file = File::open(path).unwrap();
         let mut string = String::new();
         file.read_to_string(&mut string).unwrap();
-        return string
+        string
     }
 
     pub fn set_socket_name(socket_name: &str) {

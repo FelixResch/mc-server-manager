@@ -13,7 +13,7 @@ use std::sync::RwLock;
 use std::sync::Arc;
 use std::process::ChildStdout;
 use std::io::Write;
-use chrono;
+
 
 pub struct BasicLogService {
     event_handler: EventHandler,

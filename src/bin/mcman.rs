@@ -27,7 +27,7 @@ fn main() {
     };
     let data = serde_json::to_vec(&new_con).unwrap();
 
-    socket.write(&data).unwrap();
+    socket.write_all(&data).unwrap();
     socket.flush().unwrap();
     drop(socket);
 

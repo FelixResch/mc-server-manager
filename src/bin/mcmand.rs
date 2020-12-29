@@ -186,10 +186,10 @@ impl Daemon {
                         self.subscribe_event(ServerEventType::ServerStarted, Some(vec![server_id.clone()]), client_id);
                         DaemonResponse::Ok
                     } else {
-                        DaemonResponse::ServerStarted { server_id: server_id }
+                        DaemonResponse::ServerStarted { server_id }
                     }
                 } else {
-                    DaemonResponse::ServerNotFound { server_id: server_id }
+                    DaemonResponse::ServerNotFound { server_id }
                 }
             }
             DaemonCmd::Stop { server_id, wait } => {
@@ -203,10 +203,10 @@ impl Daemon {
                         self.subscribe_event(ServerEventType::ServerStopped, Some(vec![server_id.clone()]), client_id);
                         DaemonResponse::Ok
                     } else {
-                        DaemonResponse::ServerStopped { server_id: server_id }
+                        DaemonResponse::ServerStopped { server_id }
                     }
                 } else {
-                    DaemonResponse::ServerNotFound { server_id: server_id }
+                    DaemonResponse::ServerNotFound { server_id }
                 }
             }
             DaemonCmd::SubscribeEvent { event_type, server_ids: server_names } => {

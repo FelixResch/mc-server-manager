@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="CMakeRunConfigurationManager" shouldGenerate="true" shouldDeleteObsolete="true">
+    <generated />
+  </component>
   <component name="CMakeSettings">
     <configurations>
       <configuration PROFILE_NAME="Debug" CONFIG_NAME="Debug" ENABLED="true" />
@@ -10,9 +16,20 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="da3e3064-5bb6-4647-b92e-3091daa4b848" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/src/bin/mcman.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/bin/mcmand.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/ipc/mod.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/config/mod.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/daemon/basic_log.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/daemon/event.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/daemon/mod.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/daemon/paper.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/bin/mcman.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bin/mcman.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/bin/mcmand.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bin/mcmand.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ipc/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/ipc/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -44,6 +61,7 @@
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
     <property name="WebServerToolWindowFactoryState" value="false" />
+    <property name="add_unversioned_files" value="$PROJECT_DIR$/log/paper::test/2020-12-29 21:14:26.803573529 UTC_out.log" />
     <property name="cf.first.check.clang-format" value="false" />
     <property name="node.js.detected.package.eslint" value="true" />
     <property name="node.js.detected.package.tslint" value="true" />
@@ -56,9 +74,25 @@
     <property name="nodejs_package_manager_path" value="npm" />
     <property name="org.rust.cargo.project.model.PROJECT_DISCOVERY" value="true" />
   </component>
-  <component name="RunManager">
-    <configuration name="Run" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-      <option name="command" value="run --package mcman --bin mcman" />
+  <component name="RunManager" selected="Cargo.Run mcmand">
+    <configuration name="Run mcmand" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="run --package mcman --bin mcmand" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <option name="channel" value="DEFAULT" />
+      <option name="allFeatures" value="false" />
+      <option name="emulateTerminal" value="true" />
+      <option name="backtrace" value="SHORT" />
+      <envs>
+        <env name="RUST_LOG" value="trace" />
+      </envs>
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="mcman list" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="run --package mcman --bin mcman list" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <option name="channel" value="DEFAULT" />
       <option name="allFeatures" value="false" />
@@ -71,6 +105,30 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
+    <configuration name="mcman start paper::test" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="run --package mcman --bin mcman start paper::test" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <option name="channel" value="DEFAULT" />
+      <option name="allFeatures" value="false" />
+      <option name="emulateTerminal" value="false" />
+      <option name="backtrace" value="SHORT" />
+      <envs />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration default="true" type="GradleAppRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" PASS_PARENT_ENVS_2="true">
+      <method v="2">
+        <option name="com.jetbrains.cidr.cpp.gradle.execution.GradleNativeBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <list>
+      <item itemvalue="Cargo.Run mcmand" />
+      <item itemvalue="Cargo.mcman list" />
+      <item itemvalue="Cargo.mcman start paper::test" />
+    </list>
   </component>
   <component name="RustProjectSettings">
     <option name="toolchainHomeDirectory" value="$USER_HOME$/.cargo/bin" />
@@ -87,11 +145,23 @@
       <workItem from="1608287977745" duration="11000" />
       <workItem from="1608288005193" duration="8625000" />
       <workItem from="1608371250563" duration="3389000" />
+      <workItem from="1608455533729" duration="1461000" />
+      <workItem from="1608477265016" duration="11181000" />
+      <workItem from="1608582521025" duration="4574000" />
+      <workItem from="1608637163762" duration="6253000" />
+      <workItem from="1608753395609" duration="2254000" />
+      <workItem from="1609010640316" duration="8878000" />
+      <workItem from="1609065655809" duration="5517000" />
+      <workItem from="1609237887392" duration="37000" />
+      <workItem from="1609237953776" duration="16770000" />
     </task>
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="UnknownFeatures">
+    <option featureType="com.intellij.fileTypeFactory" implementationName="*.log" />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
     <option name="TAB_STATES">

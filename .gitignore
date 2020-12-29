@@ -1,2 +1,5 @@
 /target
 /.mcman.socket
+/mcman.toml
+/paper1/
+/log/

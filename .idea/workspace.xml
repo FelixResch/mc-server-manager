@@ -17,10 +17,7 @@
   <component name="ChangeListManager">
     <list default="true" id="da3e3064-5bb6-4647-b92e-3091daa4b848" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/bin/mcman.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bin/mcman.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/bin/mcmand.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bin/mcmand.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/daemon/basic_log.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/daemon/basic_log.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.travis.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.travis.yml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -38,6 +35,11 @@
     </option>
   </component>
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="MacroExpansionManager">
@@ -66,6 +68,11 @@
     <property name="org.rust.cargo.project.model.PROJECT_DISCOVERY" value="true" />
   </component>
   <component name="RunManager" selected="Cargo.Run mcmand">
+    <configuration default="true" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" PASS_PARENT_ENVS_2="true">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="Run mcmand" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
       <option name="command" value="run --package mcman --bin mcmand" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
@@ -110,11 +117,6 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
-    <configuration default="true" type="GradleAppRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" PASS_PARENT_ENVS_2="true">
-      <method v="2">
-        <option name="com.jetbrains.cidr.cpp.gradle.execution.GradleNativeBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
     <list>
       <item itemvalue="Cargo.Run mcmand" />
       <item itemvalue="Cargo.mcman list" />
@@ -144,7 +146,8 @@
       <workItem from="1609010640316" duration="8878000" />
       <workItem from="1609065655809" duration="5517000" />
       <workItem from="1609237887392" duration="37000" />
-      <workItem from="1609237953776" duration="17539000" />
+      <workItem from="1609237953776" duration="17869000" />
+      <workItem from="1609363892016" duration="1002000" />
     </task>
     <task id="LOCAL-00001" summary="added a bunch of initial features (pre-clippy)">
       <created>1609278327932</created>
@@ -153,7 +156,28 @@
       <option name="project" value="LOCAL" />
       <updated>1609278327932</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="added a bunch of initial features (post-clippy, pre-fmt)">
+      <created>1609278802455</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1609278802455</updated>
+    </task>
+    <task id="LOCAL-00003" summary="added a bunch of initial features">
+      <created>1609278850984</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1609278850984</updated>
+    </task>
+    <task id="LOCAL-00004" summary="add travis config">
+      <created>1609364532247</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1609364532247</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -176,6 +200,9 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="added a bunch of initial features (pre-clippy)" />
-    <option name="LAST_COMMIT_MESSAGE" value="added a bunch of initial features (pre-clippy)" />
+    <MESSAGE value="added a bunch of initial features (post-clippy, pre-fmt)" />
+    <MESSAGE value="added a bunch of initial features" />
+    <MESSAGE value="add travis config" />
+    <option name="LAST_COMMIT_MESSAGE" value="add travis config" />
   </component>
 </project>

@@ -16,9 +16,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="da3e3064-5bb6-4647-b92e-3091daa4b848" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/.travis.yml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.travis.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.travis.yml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -36,6 +35,11 @@
     </option>
   </component>
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="MacroExpansionManager">
@@ -143,7 +147,7 @@
       <workItem from="1609065655809" duration="5517000" />
       <workItem from="1609237887392" duration="37000" />
       <workItem from="1609237953776" duration="17869000" />
-      <workItem from="1609363892016" duration="536000" />
+      <workItem from="1609363892016" duration="1002000" />
     </task>
     <task id="LOCAL-00001" summary="added a bunch of initial features (pre-clippy)">
       <created>1609278327932</created>
@@ -166,7 +170,14 @@
       <option name="project" value="LOCAL" />
       <updated>1609278850984</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="add travis config">
+      <created>1609364532247</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1609364532247</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -191,6 +202,7 @@
     <MESSAGE value="added a bunch of initial features (pre-clippy)" />
     <MESSAGE value="added a bunch of initial features (post-clippy, pre-fmt)" />
     <MESSAGE value="added a bunch of initial features" />
-    <option name="LAST_COMMIT_MESSAGE" value="added a bunch of initial features" />
+    <MESSAGE value="add travis config" />
+    <option name="LAST_COMMIT_MESSAGE" value="add travis config" />
   </component>
 </project>

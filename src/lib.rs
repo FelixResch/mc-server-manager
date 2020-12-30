@@ -1,4 +1,5 @@
 #![warn(clippy::unwrap_used)]
+#![warn(missing_docs)]
 pub mod config;
 pub mod daemon;
 pub mod ipc;

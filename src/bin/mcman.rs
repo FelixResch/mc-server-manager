@@ -2,35 +2,24 @@ use clap::{App, Arg, ArgMatches, SubCommand};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use interprocess::local_socket::LocalSocketStream;
 use ipc_channel::ipc::{IpcOneShotServer, IpcReceiver, IpcSender};
-use mcman::fs::get_socket_name;
+use mcman::files::get_socket_name;
 use mcman::ipc::{DaemonCmd, DaemonResponse, NewConnection, ServerEvent};
 use semver::Version;
 use std::io::Write;
+use std::os::unix::io::AsRawFd;
 use term_table::row::Row;
 use term_table::table_cell::TableCell;
 use term_table::{Table, TableStyle};
 
 fn main() {
     let matches = matches();
-
+    //println!("parsed arguments");
     let (cmd, args) = matches.subcommand();
-    let mut socket = LocalSocketStream::connect(get_socket_name()).unwrap();
-
-    let (server, path) = IpcOneShotServer::new().unwrap();
-
-    let new_con = NewConnection {
-        min_version: None,
-        client_version: Version::new(0, 1, 0),
-        socket_path: path,
-        client_name: "mcman".to_owned(),
-    };
-    let data = serde_json::to_vec(&new_con).unwrap();
-
-    socket.write_all(&data).unwrap();
-    socket.flush().unwrap();
-    drop(socket);
+    //println!("subcommand {}, {:?}", cmd, args);
+    let server = send_connection_request();
 
     let (res_in, res) = server.accept().unwrap();
+    //println!("accepted incoming connection");
 
     let cmd_out = if let DaemonResponse::SetSender { sender } = res {
         sender
@@ -96,6 +85,37 @@ fn matches() -> ArgMatches<'static> {
                 ),
         )
         .get_matches()
+}
+
+#[inline(never)]
+fn send_connection_request() -> IpcOneShotServer<DaemonResponse> {
+    let mut socket = LocalSocketStream::connect(get_socket_name()).unwrap();
+    //println!("created local socket stream to {}", get_socket_name());
+
+    let (server, path) = IpcOneShotServer::new().unwrap();
+    //println!("created OneShotServer at {}", path);
+
+    let new_con = NewConnection {
+        min_version: None,
+        client_version: Version::new(0, 1, 0),
+        socket_path: path,
+        client_name: "mcman".to_owned(),
+    };
+    //println!("created NewConnection struct: {:?}", new_con);
+    let data = serde_json::to_vec(&new_con).unwrap();
+    //println!("encoded NewConnection struct {}", String::from_utf8_lossy(&data));
+
+    //println!("needs drop: {:?}", needs_drop::<LocalSocketStream>());
+    //println!("wrote data: {:?}", socket.write_all(&data));
+    socket.write_all(&data).unwrap();
+    unsafe {
+        /*
+        In nightly 1.50.0 socket is not dropped in release builds, therefore a manual closing of the file descriptor
+        is necessary.
+         */
+        libc::close(socket.as_raw_fd());
+    }
+    server
 }
 
 struct Client {

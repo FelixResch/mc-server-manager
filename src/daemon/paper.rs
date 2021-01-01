@@ -1,3 +1,5 @@
+//! Implementations for the PaperMC server software.
+
 use crate::config::ServerConfig;
 use crate::daemon::{LogService, OutputState, Server};
 use crate::ServerType;
@@ -6,8 +8,11 @@ use std::io::Write;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::{Arc, RwLock};
 
+/// A PaperMC server
 pub struct PaperServer {
+    /// The config of this server
     config: ServerConfig,
+    /// The input of the current server process
     input: Option<ChildStdin>,
 }
 
@@ -52,6 +57,7 @@ impl Server for PaperServer {
 }
 
 impl PaperServer {
+    /// Creates a new server from the given server config
     pub fn create(config: ServerConfig) -> Self {
         PaperServer {
             config,

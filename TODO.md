@@ -13,6 +13,7 @@
     - [ ] Spigot
     - [ ] Bukkit
 - [ ] Add CLI/Web GUI for management
+- [ ] Allow the config location to be set for the daemon
 
 ## Code
 

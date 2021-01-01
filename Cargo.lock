@@ -404,8 +404,6 @@ dependencies = [
 [[package]]
 name = "interprocess"
 version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "672deb438b19b22433dcc1b2c75f34c9964e31f325155da06a2dc605706fd264"
 dependencies = [
  "blocking",
  "cfg-if 1.0.0",
@@ -512,6 +510,7 @@ dependencies = [
  "indicatif",
  "interprocess",
  "ipc-channel",
+ "libc",
  "log",
  "pretty_env_logger",
  "semver",

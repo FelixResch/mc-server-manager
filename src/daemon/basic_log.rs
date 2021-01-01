@@ -1,3 +1,5 @@
+//! This module contains a simple implementation for a log service.
+
 use crate::daemon::event::EventHandler;
 use crate::daemon::{LogService, OutputState};
 use crate::ipc::ServerEvent;
@@ -14,20 +16,31 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::thread::spawn;
 
+/// Basic implementation for a [`LogService`].
+/// It parses the Output of a process to determine the current state of a server process.
+///
+/// The output is then redirected to `log/<unit_name>/<time_and_date>_out.log`.
 pub struct BasicLogService {
+    /// The event handler for detected server events
     event_handler: EventHandler,
 }
 
 impl BasicLogService {
+    /// Creates a new log service with the given [`EventHandler`].
     pub fn new(event_handler: EventHandler) -> Self {
         Self { event_handler }
     }
 }
 
+/// Handles the output of a single process.
 struct BasicLogServiceHandler {
+    /// The current state of the process as determined by parsing the process output.
     state: Arc<RwLock<OutputState>>,
+    /// The output of the child process
     out: ChildStdout,
+    /// The [`EventHandler`] to which the events should be passed
     event_handler: EventHandler,
+    /// The id of the server this service is logging for
     server_id: String,
 }
 
@@ -46,6 +59,8 @@ impl LogService for BasicLogService {
 }
 
 impl BasicLogServiceHandler {
+    /// Spawns a thread which parses the output.
+    /// This is one of the places which could be rewritten using asynchronous tools.
     fn run(self) {
         spawn(move || {
             let Self {

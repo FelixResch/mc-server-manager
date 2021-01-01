@@ -5,7 +5,7 @@ use mcman::daemon::basic_log::BasicLogService;
 use mcman::daemon::event::{EventHandler, EventManager, EventManagerCmd};
 use mcman::daemon::{DaemonEvent, LogService, OutputState, Server};
 use mcman::ipc::{DaemonCmd, DaemonResponse, NewConnection, ServerEventType};
-use mcman::{fs::set_socket_name, ServerInfo, ServerStatus};
+use mcman::{files::set_socket_name, ServerInfo, ServerStatus};
 use semver::Version;
 use std::collections::HashMap;
 use std::fs::remove_file;
@@ -76,44 +76,49 @@ fn main() {
                         info!("client {} ({}) connected", client_name, client_version);
                         debug!("client requires minimum version {:?}", min_version);
 
-                        let res_queue = IpcSender::connect(socket_path).unwrap();
-                        let (sender, cmd_queue) = ipc_channel::ipc::channel::<DaemonCmd>().unwrap();
+                        let connect_result = IpcSender::connect(socket_path);
+                        if let Ok(res_queue) = connect_result {
+                            let (sender, cmd_queue) =
+                                ipc_channel::ipc::channel::<DaemonCmd>().unwrap();
 
-                        res_queue
-                            .send(DaemonResponse::SetSender { sender })
-                            .unwrap();
-                        res_queue
-                            .send(DaemonResponse::Version {
-                                version: get_version(),
-                            })
-                            .unwrap();
-                        let event_queue = event_manager_ctrl.clone();
-
-                        if let Some(min_version) = min_version {
-                            if min_version > get_version() {
-                                error!("can not satisfy version requirement {}", min_version);
-                                continue;
-                            }
-                        }
-
-                        let mut write = senders.lock().unwrap();
-
-                        write.insert(counter, res_queue);
-                        let queue_clone = queue.clone();
-                        let id = counter;
-
-                        spawn(move || {
-                            while let Ok(cmd) = cmd_queue.recv() {
-                                queue_clone
-                                    .send(DaemonEvent::IncomingCmd { id, cmd })
-                                    .unwrap();
-                            }
-                            event_queue
-                                .send(EventManagerCmd::RemoveAllSubscriptions { client_id: id })
+                            res_queue
+                                .send(DaemonResponse::SetSender { sender })
                                 .unwrap();
-                            debug!("ending client thread")
-                        });
-                        counter += 1;
+                            res_queue
+                                .send(DaemonResponse::Version {
+                                    version: get_version(),
+                                })
+                                .unwrap();
+                            let event_queue = event_manager_ctrl.clone();
+
+                            if let Some(min_version) = min_version {
+                                if min_version > get_version() {
+                                    error!("can not satisfy version requirement {}", min_version);
+                                    continue;
+                                }
+                            }
+
+                            let mut write = senders.lock().unwrap();
+
+                            write.insert(counter, res_queue);
+                            let queue_clone = queue.clone();
+                            let id = counter;
+
+                            spawn(move || {
+                                while let Ok(cmd) = cmd_queue.recv() {
+                                    queue_clone
+                                        .send(DaemonEvent::IncomingCmd { id, cmd })
+                                        .unwrap();
+                                }
+                                event_queue
+                                    .send(EventManagerCmd::RemoveAllSubscriptions { client_id: id })
+                                    .unwrap();
+                                debug!("ending client thread")
+                            });
+                            counter += 1;
+                        } else {
+                            warn!("error on incoming connection {:?}", connect_result)
+                        }
                     }
                     Err(e) => warn!("could not deserialize connection descriptor: {}", e),
                 }

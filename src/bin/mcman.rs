@@ -1,12 +1,21 @@
+#![feature(stmt_expr_attributes)]
+
 use clap::{App, Arg, ArgMatches, SubCommand};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use interprocess::local_socket::LocalSocketStream;
 use ipc_channel::ipc::{IpcOneShotServer, IpcReceiver, IpcSender};
+use mcman::config::DaemonConfig;
 use mcman::files::get_socket_name;
 use mcman::ipc::{DaemonCmd, DaemonResponse, NewConnection, ServerEvent};
-use semver::Version;
+use mcman::ServerType;
+use regex::Regex;
+use semver::{Identifier, Version};
+use std::error::Error;
 use std::io::Write;
+#[cfg(not(debug_assertions))]
 use std::os::unix::io::AsRawFd;
+use std::path::Path;
+use std::process::exit;
 use term_table::row::Row;
 use term_table::table_cell::TableCell;
 use term_table::{Table, TableStyle};
@@ -16,7 +25,15 @@ fn main() {
     //println!("parsed arguments");
     let (cmd, args) = matches.subcommand();
     //println!("subcommand {}, {:?}", cmd, args);
-    let server = send_connection_request();
+    let server = match send_connection_request() {
+        Ok(server) => server,
+        Err(e) => {
+            eprintln!("error when connecting to daemon: {}", e);
+            eprintln!();
+            eprintln!("make sure the daemon is running and the client is correctly configured!");
+            exit(1);
+        }
+    };
 
     let (res_in, res) = server.accept().unwrap();
     //println!("accepted incoming connection");
@@ -43,6 +60,10 @@ fn main() {
         client.start(args);
     } else if cmd == "stop" {
         client.stop(args);
+    } else if cmd == "install" {
+        client.install(args);
+    } else if cmd == "update" {
+        client.update(args);
     } else {
         eprintln!("unknown subcommand: {}", cmd);
     }
@@ -58,13 +79,12 @@ fn matches() -> ArgMatches<'static> {
             SubCommand::with_name("start")
                 .about("Start a server")
                 .arg(
-                    Arg::with_name("server_name")
+                    Arg::with_name("server-id")
                         .takes_value(true)
                         .required(true),
                 )
                 .arg(
                     Arg::with_name("no-wait")
-                        .required(true)
                         .takes_value(false)
                         .long("no-wait"),
                 ),
@@ -73,26 +93,119 @@ fn matches() -> ArgMatches<'static> {
             SubCommand::with_name("stop")
                 .about("Stop a server")
                 .arg(
-                    Arg::with_name("server_name")
+                    Arg::with_name("server-id")
                         .takes_value(true)
                         .required(true),
                 )
                 .arg(
                     Arg::with_name("no-wait")
-                        .required(true)
                         .takes_value(false)
                         .long("no-wait"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("install")
+                .about("Install a new server")
+                .arg(
+                    Arg::with_name("unit-id")
+                        .help("The unit id of the new server")
+                        .short("u")
+                        .long("unit-id")
+                        .takes_value(true)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("install-path")
+                        .help("The server directory")
+                        .long("install-path")
+                        .short("i")
+                        .takes_value(true)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("unit-file-path")
+                        .help("The name of the unit file. If left empty any unit directory in which the current user can write into is chosen")
+                        .long("unit-file-path")
+                        .takes_value(true)
+                        .required(false),
+                )
+                .arg(
+                    Arg::with_name("server-version")
+                        .help("The version of the server you want to install. (Builds are denoted by '+<build_no>')")
+                        .long("server-version")
+                        .short("v")
+                        .takes_value(true)
+                        .required(false)
+                        .validator(|str| {
+                            let regex = Regex::new("^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$").unwrap();
+                            if regex.is_match(str.as_str()) {
+                                Ok(())
+                            } else {
+                                Err("version string does not match pattern".to_string())
+                            }
+                        }),
+                )
+                .arg(
+                    Arg::with_name("server-type")
+                        .help("The type of server you want to install")
+                        .long("server-type")
+                        .short("t")
+                        .takes_value(true)
+                        .required(true)
+                        .possible_value("paper"),
+                ).arg(
+                Arg::with_name("eula")
+                    .help("Writes the accept eula file to the installation directory. Only set this option, if you have read the EULA.")
+                    .long("eula")
+                    .short("e")
+                )
+                .arg(
+                    Arg::with_name("server-name")
+                        .long("server-name")
+                        .help("The name that should be displayed in the Minecraft multiplayer server list")
+                        .takes_value(true)
+                        .required(false),
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("update")
+                .about("Update an already existing server")
+                .arg(
+                    Arg::with_name("unit-id")
+                        .help("The unit id of the new server")
+                        .short("u")
+                        .long("unit-id")
+                        .takes_value(true)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("server-version")
+                        .help("The version of the server you want to install. (Builds are denoted by '+<build_no>')")
+                        .long("server-version")
+                        .short("v")
+                        .takes_value(true)
+                        .required(false)
+                        .validator(|str| {
+                            let regex = Regex::new("^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$").unwrap();
+                            if regex.is_match(str.as_str()) {
+                                Ok(())
+                            } else {
+                                Err("version string does not match pattern".to_string())
+                            }
+                        }),
+                )
         )
         .get_matches()
 }
 
 #[inline(never)]
-fn send_connection_request() -> IpcOneShotServer<DaemonResponse> {
-    let mut socket = LocalSocketStream::connect(get_socket_name()).unwrap();
-    //println!("created local socket stream to {}", get_socket_name());
+fn send_connection_request() -> Result<IpcOneShotServer<DaemonResponse>, Box<dyn Error>> {
+    let config = DaemonConfig::load(Path::new("mcman.toml"));
+    let socket_name = config.socket_file;
 
-    let (server, path) = IpcOneShotServer::new().unwrap();
+    let mut socket = LocalSocketStream::connect(socket_name)?;
+
+    let (server, path) = IpcOneShotServer::new()?;
     //println!("created OneShotServer at {}", path);
 
     let new_con = NewConnection {
@@ -102,12 +215,13 @@ fn send_connection_request() -> IpcOneShotServer<DaemonResponse> {
         client_name: "mcman".to_owned(),
     };
     //println!("created NewConnection struct: {:?}", new_con);
-    let data = serde_json::to_vec(&new_con).unwrap();
+    let data = serde_json::to_vec(&new_con)?;
     //println!("encoded NewConnection struct {}", String::from_utf8_lossy(&data));
 
     //println!("needs drop: {:?}", needs_drop::<LocalSocketStream>());
     //println!("wrote data: {:?}", socket.write_all(&data));
-    socket.write_all(&data).unwrap();
+    socket.write_all(&data)?;
+    #[cfg(not(debug_assertions))]
     unsafe {
         /*
         In nightly 1.50.0 socket is not dropped in release builds, therefore a manual closing of the file descriptor
@@ -115,7 +229,7 @@ fn send_connection_request() -> IpcOneShotServer<DaemonResponse> {
          */
         libc::close(socket.as_raw_fd());
     }
-    server
+    Ok(server)
 }
 
 struct Client {
@@ -157,7 +271,7 @@ impl Client {
     }
 
     fn start(&self, args: Option<&ArgMatches>) {
-        let server_name = args.unwrap().value_of("server_name").unwrap();
+        let server_name = args.unwrap().value_of("server-id").unwrap();
         let no_wait = args.unwrap().is_present("no-wait");
         self.cmd_out
             .send(DaemonCmd::Start {
@@ -223,7 +337,7 @@ impl Client {
     }
 
     fn stop(&self, args: Option<&ArgMatches>) {
-        let server_name = args.unwrap().value_of("server_name").unwrap();
+        let server_name = args.unwrap().value_of("server-id").unwrap();
         let no_wait = args.unwrap().is_present("no-wait");
         self.cmd_out
             .send(DaemonCmd::Stop {
@@ -284,6 +398,120 @@ impl Client {
                 }
             } else {
                 panic!()
+            }
+        }
+    }
+
+    pub fn install(&self, args: Option<&ArgMatches>) {
+        let args = args.unwrap();
+        let version = match args.value_of("server-version") {
+            Some(version) => Version::parse(version).ok(),
+            None => None,
+        };
+        let unit_id = args.value_of("unit-id").unwrap().to_string();
+        let install_path = args.value_of("install-path").unwrap().to_string();
+        let unit_file_path = args.value_of("unit-file-path").map(|str| str.to_string());
+
+        let eula = args.is_present("eula");
+        let server_type = match args.value_of("server-type").unwrap() {
+            "paper" => ServerType::Paper,
+            _ => panic!("unknown server type"),
+        };
+
+        let server_name = args.value_of("server-name").map(|str| str.to_string());
+
+        self.cmd_out.send(DaemonCmd::InstallServer {
+            unit_id,
+            install_path,
+            unit_file_path,
+            server_version: version,
+            server_type,
+            accept_eula: eula,
+            server_name,
+        });
+
+        let spinner = ProgressBar::new_spinner()
+            .with_style(ProgressStyle::default_spinner().tick_chars("⣷⣯⣟⡿⢿⣻⣽⣾✓"));
+
+        spinner.set_draw_target(ProgressDrawTarget::stdout());
+        spinner.set_message("Waiting for daemon");
+        spinner.enable_steady_tick(100);
+
+        if let (Ok(DaemonResponse::Ok)) = self.res_in.recv() {
+            spinner.set_message("Starting installation")
+        }
+
+        while let Ok(DaemonResponse::ServerEvent { event }) = self.res_in.recv() {
+            match event {
+                ServerEvent::ActionProgress {
+                    server_id,
+                    action,
+                    progress: _progress,
+                    maximum: _maximum,
+                    action_number: _action_number,
+                } => spinner.set_message(format!("[{}] {}", server_id, action).as_str()),
+                ServerEvent::InstallationComplete { server_id } => {
+                    spinner.finish_with_message(format!("[DONE] installed {}", server_id).as_str());
+                    break;
+                }
+                ServerEvent::InstallationFailed { server_id, error } => {
+                    spinner.abandon_with_message(
+                        format!("[ERROR] error while installing {}: {:?}", server_id, error)
+                            .as_str(),
+                    );
+                    break;
+                }
+                _ => (),
+            }
+        }
+    }
+
+    pub fn update(&self, args: Option<&ArgMatches>) {
+        let args = args.unwrap();
+        let version = match args.value_of("server-version") {
+            Some(version) => Version::parse(version).ok(),
+            None => None,
+        };
+        let unit_id = args.value_of("unit-id").unwrap().to_string();
+
+
+        self.cmd_out.send(DaemonCmd::UpdateServer {
+            unit_id,
+            server_version: version,
+        });
+
+        let spinner = ProgressBar::new_spinner()
+            .with_style(ProgressStyle::default_spinner().tick_chars("⣷⣯⣟⡿⢿⣻⣽⣾✓"));
+
+        spinner.set_draw_target(ProgressDrawTarget::stdout());
+        spinner.set_message("Waiting for daemon");
+        spinner.enable_steady_tick(100);
+
+        if let (Ok(DaemonResponse::Ok)) = self.res_in.recv() {
+            spinner.set_message("Starting update")
+        }
+
+        while let Ok(DaemonResponse::ServerEvent { event }) = self.res_in.recv() {
+            match event {
+                ServerEvent::ActionProgress {
+                    server_id,
+                    action,
+                    progress: _progress,
+                    maximum: _maximum,
+                    action_number: _action_number,
+                } => spinner.set_message(format!("[{}] {}", server_id, action).as_str()),
+                ServerEvent::UpdateComplete { server_id } => {
+                    spinner.finish_with_message(format!("[DONE] installed {}", server_id).as_str());
+                    break;
+                }
+                ServerEvent::UpdateFailed { server_id, error } => {
+                    spinner.abandon_with_message(
+                        format!("[ERROR] error while installing {}: {:?}", server_id, error)
+                            .as_str(),
+                    );
+                    break;
+                }
+                _ => (),
             }
         }
     }

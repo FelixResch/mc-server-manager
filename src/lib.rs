@@ -7,13 +7,16 @@
 pub mod config;
 pub mod daemon;
 pub mod ipc;
+pub mod repo;
 
 #[macro_use]
 extern crate serde_derive;
 
+use crate::config::UnitConfig;
 use semver::Version;
 use serde::export::Formatter;
 use std::fmt::Display;
+use std::path::PathBuf;
 
 /// Contains helper methods for IPC methods.
 //TODO maybe move to ipc module and change functionality of methods to use envs
@@ -108,4 +111,9 @@ pub struct ServerInfo {
     pub server_version: Version,
     /// The current status of the server
     pub server_status: ServerStatus,
+}
+
+pub trait Unit {
+    fn unit_file_path(&self) -> PathBuf;
+    fn unit_config(&self) -> UnitConfig;
 }

@@ -1,6 +1,10 @@
 //! Primitives for daemon client inter-process communication.
 
-use crate::ServerInfo;
+pub mod install;
+pub mod update;
+
+use crate::ipc::install::InstallError;
+use crate::{ServerInfo, ServerType};
 use ipc_channel::ipc::IpcSender;
 use semver::Version;
 
@@ -36,6 +40,19 @@ pub enum DaemonCmd {
         /// The ids of the servers the client want to listen on.
         /// If this value is `None` the client wants to receive events from all servers.
         server_ids: Option<Vec<String>>,
+    },
+    InstallServer {
+        unit_id: String,
+        install_path: String,
+        unit_file_path: Option<String>,
+        server_version: Option<Version>,
+        server_type: ServerType,
+        accept_eula: bool,
+        server_name: Option<String>,
+    },
+    UpdateServer {
+        unit_id: String,
+        server_version: Option<Version>,
     },
 }
 
@@ -134,6 +151,27 @@ pub enum ServerEvent {
         /// The id of the server that has stopped
         server_id: String,
     },
+    ActionProgress {
+        server_id: String,
+        action: String,
+        progress: Option<usize>,
+        maximum: Option<usize>,
+        action_number: usize,
+    },
+    InstallationComplete {
+        server_id: String,
+    },
+    InstallationFailed {
+        server_id: String,
+        error: String,
+    },
+    UpdateComplete {
+        server_id: String,
+    },
+    UpdateFailed {
+        server_id: String,
+        error: String,
+    },
 }
 
 impl ServerEvent {
@@ -144,6 +182,11 @@ impl ServerEvent {
             ServerEvent::ServerStarted { .. } => ServerEventType::ServerStarted,
             ServerEvent::ServerStopping { .. } => ServerEventType::ServerStopping,
             ServerEvent::ServerStopped { .. } => ServerEventType::ServerStopped,
+            ServerEvent::ActionProgress { .. } => ServerEventType::ActionProgress,
+            ServerEvent::InstallationComplete { .. } => ServerEventType::InstallationComplete,
+            ServerEvent::InstallationFailed { .. } => ServerEventType::InstallationFailed,
+            ServerEvent::UpdateComplete { .. } => ServerEventType::UpdateComplete,
+            ServerEvent::UpdateFailed { .. } => ServerEventType::UpdateFailed,
         }
     }
 }
@@ -162,4 +205,9 @@ pub enum ServerEventType {
     ServerStopping,
     /// A server has stopped
     ServerStopped,
+    ActionProgress,
+    InstallationComplete,
+    InstallationFailed,
+    UpdateComplete,
+    UpdateFailed,
 }

@@ -1,17 +1,23 @@
 use interprocess::local_socket::LocalSocketListener;
 use ipc_channel::ipc::IpcSender;
-use mcman::config::DaemonConfig;
+use mcman::config::{DaemonConfig, ServerConfig, ServerUnitConfig, UnitConfig};
 use mcman::daemon::basic_log::BasicLogService;
 use mcman::daemon::event::{EventHandler, EventManager, EventManagerCmd};
-use mcman::daemon::{DaemonEvent, LogService, OutputState, Server};
-use mcman::ipc::{DaemonCmd, DaemonResponse, NewConnection, ServerEventType};
-use mcman::{files::set_socket_name, ServerInfo, ServerStatus};
+use mcman::daemon::paper::PaperServer;
+use mcman::daemon::{create_server, DaemonEvent, LogService, OutputState, Server};
+use mcman::ipc::install::{InstallError, PaperServerInstaller, ServerInstaller};
+use mcman::ipc::update::UpdateError::UnsupportedServerType;
+use mcman::ipc::update::{PaperServerUpdater, ServerUpdater, UpdateError};
+use mcman::ipc::{DaemonCmd, DaemonResponse, NewConnection, ServerEvent, ServerEventType};
+use mcman::{files::set_socket_name, ServerInfo, ServerStatus, ServerType, Unit};
 use semver::Version;
+use serde_json::error::Category::Data;
 use std::collections::HashMap;
+use std::fs;
 use std::fs::remove_file;
 use std::io::Read;
 use std::ops::DerefMut;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex, RwLock};
@@ -25,11 +31,14 @@ fn main() {
     let config = DaemonConfig::load(Path::new("mcman.toml"));
     debug!("config: {:?}", config);
 
+    let server_name = config.socket_file.clone();
+
     let (queue, daemon_queue) = channel();
     let (event_manager_ctrl, event_queue) = channel();
     let mut daemon = Daemon::from_config(
         config,
         daemon_queue,
+        queue.clone(),
         event_manager_ctrl.clone(),
         Box::new(BasicLogService::new(EventHandler::new(
             event_manager_ctrl.clone(),
@@ -38,14 +47,12 @@ fn main() {
 
     daemon.autostart();
 
-    let server_name = ".mcman.sock";
-    let socket_path = Path::new(server_name);
+    let socket_path = Path::new(server_name.as_str());
     if socket_path.exists() {
         remove_file(socket_path).unwrap();
     }
 
     let listener = LocalSocketListener::bind(server_name).unwrap();
-    set_socket_name(server_name);
 
     let senders = daemon.senders();
     let mut counter: u32 = 0;
@@ -133,6 +140,7 @@ struct Daemon {
     servers: HashMap<String, DaemonServer>,
     senders: Arc<Mutex<HashMap<u32, IpcSender<DaemonResponse>>>>,
     queue: Receiver<DaemonEvent>,
+    queue_sender: Sender<DaemonEvent>,
     log_service: Box<dyn LogService + Send>,
     event_manager_ctrl: Sender<EventManagerCmd>,
 }
@@ -141,6 +149,7 @@ impl Daemon {
     pub fn from_config(
         daemon_config: DaemonConfig,
         queue: Receiver<DaemonEvent>,
+        queue_sender: Sender<DaemonEvent>,
         event_manager_ctrl: Sender<EventManagerCmd>,
         log_service: Box<dyn LogService + Send>,
     ) -> Self {
@@ -163,6 +172,7 @@ impl Daemon {
             servers: daemon_servers,
             senders: Arc::new(Mutex::new(HashMap::new())),
             queue,
+            queue_sender,
             log_service,
             event_manager_ctrl,
         }
@@ -264,6 +274,86 @@ impl Daemon {
                 self.subscribe_event(event_type, server_names, client_id);
                 DaemonResponse::Ok
             }
+            DaemonCmd::InstallServer {
+                unit_id,
+                install_path,
+                unit_file_path,
+                server_version,
+                server_type,
+                accept_eula,
+                server_name,
+            } => {
+                self.subscribe_event(
+                    ServerEventType::InstallationComplete,
+                    Some(vec![unit_id.clone()]),
+                    client_id,
+                );
+                self.subscribe_event(
+                    ServerEventType::InstallationFailed,
+                    Some(vec![unit_id.clone()]),
+                    client_id,
+                );
+                self.subscribe_event(
+                    ServerEventType::ActionProgress,
+                    Some(vec![unit_id.clone()]),
+                    client_id,
+                );
+                self.install_server(
+                    EventHandler::new(self.event_manager_ctrl.clone()),
+                    unit_id.clone(),
+                    install_path,
+                    unit_file_path,
+                    server_version,
+                    server_type,
+                    accept_eula,
+                    server_name,
+                    self.queue_sender.clone(),
+                );
+                DaemonResponse::Ok
+            }
+            DaemonCmd::UpdateServer {
+                unit_id,
+                server_version,
+            } => {
+                let unit = self.servers.get(&unit_id);
+                if let Some(unit) = unit {
+                    let unit_file_path = unit.server.unit_file_path();
+                    let server_type = unit.server.server_type();
+                    let unit_config = unit.server.unit_config();
+                    let server_config = unit.server.server_config();
+
+                    self.subscribe_event(
+                        ServerEventType::UpdateComplete,
+                        Some(vec![unit_id.clone()]),
+                        client_id,
+                    );
+                    self.subscribe_event(
+                        ServerEventType::UpdateFailed,
+                        Some(vec![unit_id.clone()]),
+                        client_id,
+                    );
+                    self.subscribe_event(
+                        ServerEventType::ActionProgress,
+                        Some(vec![unit_id.clone()]),
+                        client_id,
+                    );
+
+                    self.update_server(
+                        EventHandler::new(self.event_manager_ctrl.clone()),
+                        unit_id,
+                        server_version,
+                        server_type,
+                        unit_config,
+                        server_config,
+                        unit_file_path,
+                        self.queue_sender.clone(),
+                    );
+
+                    DaemonResponse::Ok
+                } else {
+                    DaemonResponse::ServerNotFound { server_id: unit_id }
+                }
+            }
         }
     }
 
@@ -320,9 +410,219 @@ impl Daemon {
                             }
                         }
                     }
+                    DaemonEvent::AddServerUnit {
+                        server_unit_config,
+                        unit_file,
+                    } => {
+                        let unit_id = server_unit_config.unit.id.clone();
+                        match create_server(server_unit_config, unit_file) {
+                            Ok(server) => {
+                                self.servers.insert(
+                                    unit_id.clone(),
+                                    DaemonServer {
+                                        process: None,
+                                        server,
+                                        status: None,
+                                        server_id: unit_id,
+                                    },
+                                );
+                            }
+                            _ => (),
+                        }
+                    }
                 }
             }
         });
+    }
+
+    pub fn install_server(
+        &mut self,
+        mut event_handler: EventHandler,
+        unit_id: String,
+        install_path: String,
+        unit_file_path: Option<String>,
+        server_version: Option<Version>,
+        server_type: ServerType,
+        accept_eula: bool,
+        server_name: Option<String>,
+        daemon_queue: Sender<DaemonEvent>,
+    ) {
+        if self.servers.contains_key(&unit_id) {
+            event_handler.raise_event(
+                unit_id.as_str(),
+                ServerEvent::InstallationFailed {
+                    server_id: unit_id.clone(),
+                    error: "a unit with that name already exists".to_string(),
+                },
+            );
+        } else {
+            spawn(move || {
+                let server_id = unit_id.clone();
+                let install_result = Daemon::perform_installation(
+                    &mut event_handler,
+                    unit_id,
+                    install_path,
+                    unit_file_path.clone(),
+                    server_version,
+                    server_type,
+                    accept_eula,
+                    server_name,
+                );
+                match install_result {
+                    Ok(server_unit_config) => {
+                        let server_id = server_unit_config.unit.id.clone();
+                        daemon_queue.send(DaemonEvent::AddServerUnit {
+                            server_unit_config,
+                            unit_file: unit_file_path.unwrap().into(),
+                        });
+                        event_handler.raise_event(
+                            server_id.as_ref(),
+                            ServerEvent::InstallationComplete {
+                                server_id: server_id.clone(),
+                            },
+                        )
+                    }
+                    Err(e) => event_handler.raise_event(
+                        server_id.as_ref(),
+                        ServerEvent::InstallationFailed {
+                            server_id: server_id.clone(),
+                            error: format!("{:?}", e),
+                        },
+                    ),
+                }
+            });
+        }
+    }
+
+    fn perform_installation(
+        mut event_handler: &mut EventHandler,
+        unit_id: String,
+        install_path: String,
+        unit_file_path: Option<String>,
+        server_version: Option<Version>,
+        server_type: ServerType,
+        accept_eula: bool,
+        server_name: Option<String>,
+    ) -> Result<ServerUnitConfig, InstallError> {
+        match server_type {
+            ServerType::Paper => {
+                let mut paper_installer =
+                    PaperServerInstaller::new(event_handler.clone(), unit_id.clone());
+                if let Some(unit_file_path) = unit_file_path {
+                    let path = Path::new(unit_file_path.as_str());
+                    let mut unit_path = PathBuf::new();
+                    unit_path.push(path);
+                    //TODO check if unit dir is writeable
+
+                    let server_config = paper_installer.install_server(
+                        install_path,
+                        server_version,
+                        accept_eula,
+                        server_name,
+                    )?;
+                    let server_unit_config = ServerUnitConfig {
+                        unit: UnitConfig {
+                            id: unit_id.clone(),
+                            unit_type: "server".to_string(),
+                        },
+                        server: server_config,
+                    };
+
+                    let config_string = toml::to_string(&server_unit_config).unwrap();
+                    debug!("writing configuration {} to {:?}", config_string, unit_path);
+                    fs::write(unit_path, config_string)
+                        .map_err(|e| InstallError::WriteUnitFile(e))?;
+
+                    Ok((server_unit_config))
+                } else {
+                    //TODO construct path
+                    Err(InstallError::DirExists)
+                }
+            }
+            _ => Err(InstallError::UnsupportedServerType(server_type)),
+        }
+    }
+
+    fn update_server(
+        &self,
+        mut event_handler: EventHandler,
+        unit_id: String,
+        server_version: Option<Version>,
+        server_type: ServerType,
+        unit_config: UnitConfig,
+        server_config: ServerConfig,
+        unit_file_path: PathBuf,
+        daemon_queue: Sender<DaemonEvent>,
+    ) {
+        spawn(move || {
+            let server_id = unit_id.clone();
+            let update_result = Daemon::perform_update(
+                event_handler.clone(),
+                unit_id,
+                server_version,
+                server_type,
+                unit_config,
+                server_config,
+                unit_file_path.clone(),
+            );
+
+            match update_result {
+                Ok(server_unit_config) => {
+                    let server_id = server_unit_config.unit.id.clone();
+                    daemon_queue.send(DaemonEvent::AddServerUnit {
+                        server_unit_config,
+                        unit_file: unit_file_path.into(),
+                    });
+                    event_handler.raise_event(
+                        server_id.as_ref(),
+                        ServerEvent::UpdateComplete {
+                            server_id: server_id.clone(),
+                        },
+                    )
+                }
+                Err(e) => event_handler.raise_event(
+                    server_id.as_ref(),
+                    ServerEvent::UpdateFailed {
+                        server_id: server_id.clone(),
+                        error: format!("{:?}", e),
+                    },
+                ),
+            }
+        });
+    }
+
+    fn perform_update(
+        event_handler: EventHandler,
+        unit_id: String,
+        server_version: Option<Version>,
+        server_type: ServerType,
+        unit_config: UnitConfig,
+        server_config: ServerConfig,
+        unit_file_path: PathBuf,
+    ) -> Result<ServerUnitConfig, UpdateError> {
+        match server_type {
+            ServerType::Paper => {
+                let mut paper_updater =
+                    PaperServerUpdater::new(unit_id, unit_file_path.clone(), event_handler);
+                let server_config = paper_updater.update_server(server_version, server_config)?;
+
+                let server_unit_config = ServerUnitConfig {
+                    unit: unit_config,
+                    server: server_config,
+                };
+
+                let config_string = toml::to_string(&server_unit_config).unwrap();
+                debug!(
+                    "writing configuration {} to {:?}",
+                    config_string, unit_file_path
+                );
+                fs::write(unit_file_path, config_string)
+                    .map_err(|e| UpdateError::WriteUnitFile(e))?;
+
+                Ok(server_unit_config)
+            }
+            _ => Err(UnsupportedServerType(server_type)),
+        }
     }
 }
 

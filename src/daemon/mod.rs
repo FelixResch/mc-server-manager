@@ -4,9 +4,13 @@ pub mod basic_log;
 pub mod event;
 pub mod paper;
 
+use crate::config::{ServerConfig, ServerUnitConfig};
+use crate::daemon::paper::PaperServer;
 use crate::ipc::{DaemonCmd, ServerEvent};
-use crate::ServerType;
+use crate::{ServerType, Unit};
+use log::warn;
 use semver::Version;
+use std::path::PathBuf;
 use std::process::{Child, ChildStdout};
 use std::sync::{Arc, RwLock};
 
@@ -14,7 +18,10 @@ use std::sync::{Arc, RwLock};
 ///
 /// Implementations are:
 /// - [`paper::PaperServer`]
-pub trait Server {
+pub trait Server
+where
+    Self: Unit,
+{
     /// Start a process for this server.
     /// `log_service` contains a log service which parses the output to update the server status.
     ///
@@ -35,6 +42,8 @@ pub trait Server {
 
     /// Returns the path to the server directory
     fn path(&self) -> String;
+
+    fn server_config(&self) -> ServerConfig;
 }
 
 /// State of a Minecraft server process based on the log output.
@@ -78,4 +87,29 @@ pub enum DaemonEvent {
         /// The event that should be sent to the client
         event: ServerEvent,
     },
+    AddServerUnit {
+        server_unit_config: ServerUnitConfig,
+        unit_file: PathBuf,
+    },
+}
+
+//TODO proper error type
+pub fn create_server(
+    server_unit_config: ServerUnitConfig,
+    unit_file: PathBuf,
+) -> Result<Box<dyn Server + Send>, ()> {
+    match server_unit_config.server.type_name.as_str() {
+        "paper" => {
+            let ServerUnitConfig { unit, server } = server_unit_config;
+            let server = PaperServer::create(unit, server, unit_file);
+            Ok(Box::new(server))
+        }
+        _ => {
+            warn!(
+                "unknown server type {}",
+                server_unit_config.server.type_name
+            );
+            Err(())
+        }
+    }
 }

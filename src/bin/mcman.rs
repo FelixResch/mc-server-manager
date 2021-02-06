@@ -474,7 +474,6 @@ impl Client {
         };
         let unit_id = args.value_of("unit-id").unwrap().to_string();
 
-
         self.cmd_out.send(DaemonCmd::UpdateServer {
             unit_id,
             server_version: version,

@@ -56,6 +56,8 @@ pub struct ServerConfig {
     pub jar: String,
     /// The version of the installed server software
     pub version: Version,
+    /// The amount of memory dedicated to a server in gigabyte
+    pub memory: u32,
 }
 
 impl DaemonConfig {

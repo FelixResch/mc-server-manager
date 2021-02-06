@@ -153,6 +153,7 @@ impl ServerInstaller for PaperServerInstaller {
                 type_name: "paper".to_string(),
                 jar: jar_name.to_string(),
                 version: artifact.version(),
+                memory: 10,
             })
         }
     }

@@ -6,7 +6,7 @@ pub mod paper;
 
 use crate::config::{ServerConfig, ServerUnitConfig};
 use crate::daemon::paper::PaperServer;
-use crate::ipc::{DaemonCmd, ServerEvent};
+use crate::ipc::{DaemonCmd, ServerEvent, DaemonIpcEvent};
 use crate::{ServerType, Unit};
 use log::warn;
 use semver::Version;
@@ -91,6 +91,8 @@ pub enum DaemonEvent {
         server_unit_config: ServerUnitConfig,
         unit_file: PathBuf,
     },
+    StopDaemon,
+    SendDaemonEvent(DaemonIpcEvent)
 }
 
 //TODO proper error type

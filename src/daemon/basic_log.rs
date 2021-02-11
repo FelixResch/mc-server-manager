@@ -3,7 +3,7 @@
 use crate::daemon::event::EventHandler;
 use crate::daemon::{LogService, OutputState};
 use crate::ipc::ServerEvent;
-use log::info;
+use log::{info, warn};
 use std::fs::{create_dir_all, File};
 use std::io::BufRead;
 use std::io::BufReader;
@@ -116,6 +116,16 @@ impl BasicLogServiceHandler {
                                 &server_id,
                                 ServerEvent::ServerStopped {
                                     server_id: server_id.clone(),
+                                },
+                            )
+                        } else if line.contains("Failed to load eula.txt") {
+                            warn!("eula not accepted for unit {}", server_id);
+                            *state.write().unwrap().deref_mut() = OutputState::Errored;
+                            event_handler.raise_event(
+                                &server_id,
+                                ServerEvent::ServerFailed {
+                                    server_id: server_id.clone(),
+                                    error: "EULA not accepted".to_string(),
                                 },
                             )
                         }

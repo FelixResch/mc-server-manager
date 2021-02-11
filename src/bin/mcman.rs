@@ -6,7 +6,7 @@ use interprocess::local_socket::LocalSocketStream;
 use ipc_channel::ipc::{IpcOneShotServer, IpcReceiver, IpcSender};
 use mcman::config::DaemonConfig;
 use mcman::files::get_socket_name;
-use mcman::ipc::{DaemonCmd, DaemonResponse, NewConnection, ServerEvent};
+use mcman::ipc::{DaemonCmd, DaemonResponse, NewConnection, ServerEvent, DaemonIpcEvent};
 use mcman::ServerType;
 use regex::Regex;
 use semver::{Identifier, Version};
@@ -64,6 +64,8 @@ fn main() {
         client.install(args);
     } else if cmd == "update" {
         client.update(args);
+    } else if cmd == "stop-daemon" {
+        client.stop_daemon(args);
     } else {
         eprintln!("unknown subcommand: {}", cmd);
     }
@@ -195,6 +197,10 @@ fn matches() -> ArgMatches<'static> {
                         }),
                 )
         )
+        .subcommand(
+            SubCommand::with_name("stop-daemon")
+                .about("Shut down the minecraft server manager daemon")
+        )
         .get_matches()
 }
 
@@ -311,6 +317,9 @@ impl Client {
                 if let DaemonResponse::ServerEvent { event } = response {
                     if let ServerEvent::ServerStarting { server_id } = event {
                         spinner.set_message(format!("Starting {}", server_id).as_str());
+                    } else if let ServerEvent::ServerFailed { server_id, error} = event {
+                        spinner.finish_and_clear();
+                        spinner.println(format!("Starting unit {} failed: {}", server_id, error))
                     } else {
                         panic!()
                     }
@@ -324,6 +333,9 @@ impl Client {
                 if let DaemonResponse::ServerEvent { event } = response {
                     if let ServerEvent::ServerStarted { server_id } = event {
                         spinner.finish_with_message(format!("Started {}", server_id).as_str());
+                    } else if let ServerEvent::ServerFailed { server_id, error} = event {
+                        spinner.finish_and_clear();
+                        spinner.println(format!("Starting unit {} failed: {}", server_id, error))
                     } else {
                         panic!()
                     }
@@ -512,6 +524,25 @@ impl Client {
                 }
                 _ => (),
             }
+        }
+    }
+
+    pub fn stop_daemon(&self, args: Option<&ArgMatches>) {
+        self.cmd_out.send(DaemonCmd::StopDaemon).unwrap();
+
+        let spinner = ProgressBar::new_spinner()
+            .with_style(ProgressStyle::default_spinner().tick_chars("⣷⣯⣟⡿⢿⣻⣽⣾✓"));
+
+        spinner.set_draw_target(ProgressDrawTarget::stdout());
+        spinner.set_message("Waiting for daemon");
+        spinner.enable_steady_tick(100);
+
+        if let (Ok(DaemonResponse::Ok)) = self.res_in.recv() {
+            spinner.set_message("Daemon shutdown in progress")
+        }
+
+        if let (Ok(DaemonResponse::DaemonEvent(DaemonIpcEvent::Stopped))) = self.res_in.recv() {
+            spinner.finish_with_message("Daemon has stopped")
         }
     }
 }

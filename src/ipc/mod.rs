@@ -54,6 +54,7 @@ pub enum DaemonCmd {
         unit_id: String,
         server_version: Option<Version>,
     },
+    StopDaemon,
 }
 
 /// Responses sent from the daemon to a client
@@ -111,6 +112,7 @@ pub enum DaemonResponse {
     ///
     /// Note: This response does not specify to which request it belongs, this should be changed.
     Ok,
+    DaemonEvent(DaemonIpcEvent),
 }
 
 /// Information for a new connection used when establishing a new connection to the daemon.
@@ -172,6 +174,10 @@ pub enum ServerEvent {
         server_id: String,
         error: String,
     },
+    ServerFailed {
+        server_id: String,
+        error: String,
+    }
 }
 
 impl ServerEvent {
@@ -187,6 +193,7 @@ impl ServerEvent {
             ServerEvent::InstallationFailed { .. } => ServerEventType::InstallationFailed,
             ServerEvent::UpdateComplete { .. } => ServerEventType::UpdateComplete,
             ServerEvent::UpdateFailed { .. } => ServerEventType::UpdateFailed,
+            ServerEvent::ServerFailed { .. } => ServerEventType::ServerFailed,
         }
     }
 }
@@ -210,4 +217,10 @@ pub enum ServerEventType {
     InstallationFailed,
     UpdateComplete,
     UpdateFailed,
+    ServerFailed,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum DaemonIpcEvent {
+    Stopped,
 }

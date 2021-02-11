@@ -8,7 +8,7 @@ use mcman::daemon::{create_server, DaemonEvent, LogService, OutputState, Server}
 use mcman::ipc::install::{InstallError, PaperServerInstaller, ServerInstaller};
 use mcman::ipc::update::UpdateError::UnsupportedServerType;
 use mcman::ipc::update::{PaperServerUpdater, ServerUpdater, UpdateError};
-use mcman::ipc::{DaemonCmd, DaemonResponse, NewConnection, ServerEvent, ServerEventType};
+use mcman::ipc::{DaemonCmd, DaemonResponse, NewConnection, ServerEvent, ServerEventType, DaemonIpcEvent};
 use mcman::{files::set_socket_name, ServerInfo, ServerStatus, ServerType, Unit};
 use semver::Version;
 use serde_json::error::Category::Data;
@@ -18,10 +18,12 @@ use std::fs::remove_file;
 use std::io::Read;
 use std::ops::DerefMut;
 use std::path::{Path, PathBuf};
-use std::process::Child;
+use std::process::{Child, exit};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex, RwLock};
-use std::thread::spawn;
+use std::thread::{spawn, sleep};
+use sd_notify::NotifyState;
+use std::time::Duration;
 
 #[macro_use]
 extern crate log;
@@ -62,6 +64,17 @@ fn main() {
     event_manager.run();
 
     daemon.start_thread();
+
+    if cfg!(feature = "systemd") {
+        if let Ok(true) = sd_notify::booted() {
+            if let Ok(ctrl) = std::env::var("MCMAND_CTRL") {
+                if ctrl == "systemd" {
+                    debug!("systemd detected, notifying systemd");
+                    sd_notify::notify(false, &[NotifyState::Ready]);
+                }
+            }
+        }
+    }
 
     while let Ok(mut rx) = listener.accept() {
         receiver_buffer.clear();
@@ -354,6 +367,10 @@ impl Daemon {
                     DaemonResponse::ServerNotFound { server_id: unit_id }
                 }
             }
+            DaemonCmd::StopDaemon => {
+                self.queue_sender.send(DaemonEvent::StopDaemon).unwrap();
+                DaemonResponse::Ok
+            }
         }
     }
 
@@ -429,6 +446,56 @@ impl Daemon {
                             }
                             _ => (),
                         }
+                    }
+                    DaemonEvent::StopDaemon => {
+
+                        if cfg!(feature = "systemd") {
+                            if let Ok(true) = sd_notify::booted() {
+                                if let Ok(ctrl) = std::env::var("MCMAND_CTRL") {
+                                    if ctrl == "systemd" {
+                                        debug!("systemd detected, notifying systemd");
+                                        sd_notify::notify(false, &[NotifyState::Stopping]);
+                                    }
+                                }
+                            }
+                        }
+
+                        self.servers.iter_mut().map(|(unit_id, server)| {
+                            debug!("Stopping unit {}", unit_id);
+                            match server.status() {
+                                ServerStatus::Starting => {
+                                    if server.has_started() {
+                                        (unit_id, server.stop())
+                                    } else {
+                                        (unit_id, None)
+                                    }
+                                }
+                                ServerStatus::Running => {
+                                    (unit_id, server.stop())
+                                }
+                                ServerStatus::Updating => { panic!("currently no strategy implemented!") }
+                                ServerStatus::Lockdown => { panic!("currently no strategy implemented!") }
+                                _ => {
+                                    debug!("Nothing to do for unit {}", unit_id);
+                                    (unit_id, None)
+                                }
+                            }
+                        }).for_each(|(unit_id, mut child)| {
+                            if let Some(mut child) = child {
+                                let exit_status = child.wait();
+                                debug!("unit {} stopped with exit status {:?}", unit_id, exit_status);
+                            }
+                        });
+                        self.queue_sender.send(DaemonEvent::SendDaemonEvent(DaemonIpcEvent::Stopped));
+                    }
+                    DaemonEvent::SendDaemonEvent(DaemonIpcEvent::Stopped) => {
+                        let mut senders = self.senders.lock().unwrap();
+                        for sender in senders.values_mut() {
+                            sender.send(DaemonResponse::DaemonEvent(DaemonIpcEvent::Stopped));
+                        }
+                        sleep(Duration::from_millis(500));  // might not really be necessary but leave time to propagate events
+                        exit(0);
+                        unreachable!()
                     }
                 }
             }
@@ -676,8 +743,21 @@ impl DaemonServer {
         self.server.send_command(command);
     }
 
-    pub fn stop(&mut self) {
-        self.send_command("stop".to_string())
+    pub fn stop(&mut self) -> Option<Child> {
+        if self.process.is_some() {
+            self.send_command("stop".to_string());
+            self.process.take()
+        } else {
+            None
+        }
+    }
+
+    pub fn has_started(&mut self) -> bool {
+        //TODO function isn't nice, but since we are going async we don't need to worry about this currently
+        while let ServerStatus::Starting = self.status() {
+            sleep(Duration::from_millis(200));
+        }
+        return true
     }
 }
 

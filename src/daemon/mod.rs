@@ -6,7 +6,7 @@ pub mod paper;
 
 use crate::config::{ServerConfig, ServerUnitConfig};
 use crate::daemon::paper::PaperServer;
-use crate::ipc::{DaemonCmd, ServerEvent, DaemonIpcEvent};
+use crate::ipc::{DaemonCmd, DaemonIpcEvent, ServerEvent};
 use crate::{ServerType, Unit};
 use log::warn;
 use semver::Version;
@@ -43,6 +43,7 @@ where
     /// Returns the path to the server directory
     fn path(&self) -> String;
 
+    /// Server config parameters of this server unit
     fn server_config(&self) -> ServerConfig;
 }
 
@@ -87,14 +88,20 @@ pub enum DaemonEvent {
         /// The event that should be sent to the client
         event: ServerEvent,
     },
+    /// Add a server unit to the unit store of the daemon
     AddServerUnit {
+        /// The config parameters of the server unit
         server_unit_config: ServerUnitConfig,
+        /// The file at which the configuration is stored
         unit_file: PathBuf,
     },
+    /// Stop the daemon gracefully
     StopDaemon,
-    SendDaemonEvent(DaemonIpcEvent)
+    /// Send an event to all currently connected IPC clients
+    SendDaemonEvent(DaemonIpcEvent),
 }
 
+/// Create a server unit from the given server unit config
 //TODO proper error type
 pub fn create_server(
     server_unit_config: ServerUnitConfig,

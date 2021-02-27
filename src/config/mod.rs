@@ -1,14 +1,13 @@
 //! Contains structs for loading and modifying daemon and server configurations.
-use crate::daemon::paper::PaperServer;
 use crate::daemon::Server;
+#[allow(unused_imports)]
 use log::{debug, error, info, warn};
 use semver::Version;
 use std::collections::HashMap;
-use std::ffi::OsStr;
 use std::fs::{read_to_string, File};
 use std::io::Read;
-use std::path::{Path, PathBuf};
-use walkdir::{DirEntry, Error, WalkDir};
+use std::path::Path;
+use walkdir::WalkDir;
 
 /// Config of a daemon
 #[derive(Debug, Serialize, Deserialize)]

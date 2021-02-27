@@ -48,7 +48,7 @@ impl EventManager {
                                         client_id: *subscription,
                                         event: event.clone(),
                                     })
-                                    .unwrap();
+                                    .expect("send to daemon main event queue");
                             }
                         }
                     }
@@ -148,6 +148,6 @@ impl EventHandler {
                 server_id: server_id.to_owned(),
                 event,
             })
-            .unwrap();
+            .expect("send to event manager queue");
     }
 }

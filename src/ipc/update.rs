@@ -1,4 +1,6 @@
-use crate::config::{ServerConfig, UnitConfig};
+//! Traits and implementations for server updaters
+
+use crate::config::ServerConfig;
 use crate::daemon::event::EventHandler;
 use crate::ipc::install::InstallError;
 use crate::ipc::ServerEvent;
@@ -8,10 +10,15 @@ use crate::ServerType;
 use semver::Version;
 use std::error::Error;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 
+/// Trait for server updaters.
 pub trait ServerUpdater {
+    /// Updates an existing server to the given version. If no version is provided the server
+    /// should be updated to the latest version.
+    // This behaviour should be discussed further: Maybe it would be better to only to minor version
+    // updates automatically? What about updates for build versions?
     fn update_server(
         &mut self,
         server_version: Option<Version>,
@@ -19,22 +26,40 @@ pub trait ServerUpdater {
     ) -> Result<ServerConfig, UpdateError>;
 }
 
+/// Errors that can happen during an update operations
 #[derive(Debug)]
 pub enum UpdateError {
+    /// Download of an artifact or an additional resource has failed
     DownloadFailed(Box<dyn Error + 'static + Send>),
+    /// The patching process (Vanilla -> other server) failed.
+    ///
+    /// The passed String contains additional info or error messages.
+    ///
+    /// This error MUST only be sent by installers that patch the Vanilla jar.
     PerformPatch(String),
+    /// An error occurred during the writing of the unit file.
+    ///
+    /// This usually indicates wrong file permissions.
     WriteUnitFile(io::Error),
+    /// The server is already using the current version/build
     AlreadyUpToDate,
+    /// The updater does not support updating the requested server port
     UnsupportedServerType(ServerType),
 }
 
+/// Updater for paper servers
 pub struct PaperServerUpdater {
+    /// The id of the unit, that should be updated
     unit_id: String,
+    /// The path to the file of the unit
+    #[allow(dead_code)]
     unit_file_path: PathBuf,
+    /// an event handler which is connected to the main event manager
     event_handler: EventHandler,
 }
 
 impl PaperServerUpdater {
+    /// Create a new updater for paper servers
     pub fn new(unit_id: String, unit_file_path: PathBuf, event_handler: EventHandler) -> Self {
         Self {
             unit_id,
@@ -71,12 +96,18 @@ impl ServerUpdater for PaperServerUpdater {
             Some(target_version) => PaperRepository::get_artifact(target_version),
         };
 
-        if current_version >= target_artifact.version() {
-            if current_version.build.first().unwrap()
-                >= target_artifact.version().build.first().unwrap()
-            {
-                return Err(UpdateError::AlreadyUpToDate);
-            }
+        if current_version >= target_artifact.version()
+            && current_version
+                .build
+                .first()
+                .expect("version build information")
+                >= target_artifact
+                    .version()
+                    .build
+                    .first()
+                    .expect("version build information")
+        {
+            return Err(UpdateError::AlreadyUpToDate);
         }
 
         self.event_handler.raise_event(
@@ -114,13 +145,13 @@ impl ServerUpdater for PaperServerUpdater {
             },
         );
 
-        let mut child = Command::new("java".to_string())
+        let child = Command::new("java".to_string())
             .arg("-Dpaperclip.patchonly=true")
             .arg("-jar")
             .arg(&jar_name)
             .current_dir(&path)
             .output()
-            .unwrap();
+            .expect("start patch command");
 
         if !child.status.success() {
             Err(UpdateError::PerformPatch(

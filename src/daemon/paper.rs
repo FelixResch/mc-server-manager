@@ -1,6 +1,6 @@
 //! Implementations for the PaperMC server software.
 
-use crate::config::{ServerConfig, ServerUnitConfig, UnitConfig};
+use crate::config::{ServerConfig, UnitConfig};
 use crate::daemon::{LogService, OutputState, Server};
 use crate::{ServerType, Unit};
 use semver::Version;

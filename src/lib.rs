@@ -28,9 +28,10 @@ pub mod files {
     /// Return the name of the local socket used by the daemon.
     pub fn get_socket_name() -> String {
         let path = Path::new(".mcman.socket");
-        let mut file = File::open(path).unwrap();
+        let mut file = File::open(path).expect("open socket configuration file");
         let mut string = String::new();
-        file.read_to_string(&mut string).unwrap();
+        file.read_to_string(&mut string)
+            .expect("read socket configuration file");
         string
     }
 
@@ -38,14 +39,14 @@ pub mod files {
     /// This method should only be used by the/a daemon.
     pub fn set_socket_name(socket_name: &str) {
         let path = Path::new(".mcman.socket");
-        let mut file = File::create(&path).unwrap();
-        write!(file, "{}", socket_name).unwrap();
+        let mut file = File::create(&path).expect("create socket configuration file");
+        write!(file, "{}", socket_name).expect("write configuration to socket configuration file");
     }
 
     /// Delete the file where the name of the local socket is stored.
     pub fn clear_socket_name() {
         let path = Path::new(".mcman.socket");
-        remove_file(path).unwrap();
+        let _ = remove_file(path);
     }
 }
 
@@ -113,7 +114,10 @@ pub struct ServerInfo {
     pub server_status: ServerStatus,
 }
 
+/// General properties of any unit.
 pub trait Unit {
+    /// The file which is used to store the config of this unit.
     fn unit_file_path(&self) -> PathBuf;
+    /// The unit config for this unit.
     fn unit_config(&self) -> UnitConfig;
 }

@@ -5,11 +5,10 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use interprocess::local_socket::LocalSocketStream;
 use ipc_channel::ipc::{IpcOneShotServer, IpcReceiver, IpcSender};
 use mcman::config::DaemonConfig;
-use mcman::files::get_socket_name;
-use mcman::ipc::{DaemonCmd, DaemonResponse, NewConnection, ServerEvent, DaemonIpcEvent};
+use mcman::ipc::{DaemonCmd, DaemonIpcEvent, DaemonResponse, NewConnection, ServerEvent};
 use mcman::ServerType;
 use regex::Regex;
-use semver::{Identifier, Version};
+use semver::Version;
 use std::error::Error;
 use std::io::Write;
 #[cfg(not(debug_assertions))]
@@ -66,6 +65,8 @@ fn main() {
         client.update(args);
     } else if cmd == "stop-daemon" {
         client.stop_daemon(args);
+    } else if cmd == "say" {
+        client.say(args);
     } else {
         eprintln!("unknown subcommand: {}", cmd);
     }
@@ -182,7 +183,7 @@ fn matches() -> ArgMatches<'static> {
                 )
                 .arg(
                     Arg::with_name("server-version")
-                        .help("The version of the server you want to install. (Builds are denoted by '+<build_no>')")
+                        .help("The version of the server you want to update to. (Builds are denoted by '+<build_no>')")
                         .long("server-version")
                         .short("v")
                         .takes_value(true)
@@ -197,6 +198,20 @@ fn matches() -> ArgMatches<'static> {
                         }),
                 )
         )
+        .subcommand(SubCommand::with_name("say")
+            .about("Send a message to be broadcasted on a running server")
+            .arg(
+                Arg::with_name("unit-id")
+                    .help("The unit id of the new server")
+                    .takes_value(true)
+                    .required(true),
+            )
+            .arg(
+                Arg::with_name("message")
+                    .help("The message you want to send")
+                    .takes_value(true)
+                    .required(true)
+            ))
         .subcommand(
             SubCommand::with_name("stop-daemon")
                 .about("Shut down the minecraft server manager daemon")
@@ -317,7 +332,7 @@ impl Client {
                 if let DaemonResponse::ServerEvent { event } = response {
                     if let ServerEvent::ServerStarting { server_id } = event {
                         spinner.set_message(format!("Starting {}", server_id).as_str());
-                    } else if let ServerEvent::ServerFailed { server_id, error} = event {
+                    } else if let ServerEvent::ServerFailed { server_id, error } = event {
                         spinner.finish_and_clear();
                         spinner.println(format!("Starting unit {} failed: {}", server_id, error))
                     } else {
@@ -333,7 +348,7 @@ impl Client {
                 if let DaemonResponse::ServerEvent { event } = response {
                     if let ServerEvent::ServerStarted { server_id } = event {
                         spinner.finish_with_message(format!("Started {}", server_id).as_str());
-                    } else if let ServerEvent::ServerFailed { server_id, error} = event {
+                    } else if let ServerEvent::ServerFailed { server_id, error } = event {
                         spinner.finish_and_clear();
                         spinner.println(format!("Starting unit {} failed: {}", server_id, error))
                     } else {
@@ -432,15 +447,17 @@ impl Client {
 
         let server_name = args.value_of("server-name").map(|str| str.to_string());
 
-        self.cmd_out.send(DaemonCmd::InstallServer {
-            unit_id,
-            install_path,
-            unit_file_path,
-            server_version: version,
-            server_type,
-            accept_eula: eula,
-            server_name,
-        });
+        self.cmd_out
+            .send(DaemonCmd::InstallServer {
+                unit_id,
+                install_path,
+                unit_file_path,
+                server_version: version,
+                server_type,
+                accept_eula: eula,
+                server_name,
+            })
+            .expect("send to daemon");
 
         let spinner = ProgressBar::new_spinner()
             .with_style(ProgressStyle::default_spinner().tick_chars("⣷⣯⣟⡿⢿⣻⣽⣾✓"));
@@ -449,7 +466,7 @@ impl Client {
         spinner.set_message("Waiting for daemon");
         spinner.enable_steady_tick(100);
 
-        if let (Ok(DaemonResponse::Ok)) = self.res_in.recv() {
+        if let Ok(DaemonResponse::Ok) = self.res_in.recv() {
             spinner.set_message("Starting installation")
         }
 
@@ -486,10 +503,12 @@ impl Client {
         };
         let unit_id = args.value_of("unit-id").unwrap().to_string();
 
-        self.cmd_out.send(DaemonCmd::UpdateServer {
-            unit_id,
-            server_version: version,
-        });
+        self.cmd_out
+            .send(DaemonCmd::UpdateServer {
+                unit_id,
+                server_version: version,
+            })
+            .expect("send to daemon");
 
         let spinner = ProgressBar::new_spinner()
             .with_style(ProgressStyle::default_spinner().tick_chars("⣷⣯⣟⡿⢿⣻⣽⣾✓"));
@@ -498,7 +517,7 @@ impl Client {
         spinner.set_message("Waiting for daemon");
         spinner.enable_steady_tick(100);
 
-        if let (Ok(DaemonResponse::Ok)) = self.res_in.recv() {
+        if let Ok(DaemonResponse::Ok) = self.res_in.recv() {
             spinner.set_message("Starting update")
         }
 
@@ -527,7 +546,7 @@ impl Client {
         }
     }
 
-    pub fn stop_daemon(&self, args: Option<&ArgMatches>) {
+    pub fn stop_daemon(&self, _args: Option<&ArgMatches>) {
         self.cmd_out.send(DaemonCmd::StopDaemon).unwrap();
 
         let spinner = ProgressBar::new_spinner()
@@ -537,12 +556,34 @@ impl Client {
         spinner.set_message("Waiting for daemon");
         spinner.enable_steady_tick(100);
 
-        if let (Ok(DaemonResponse::Ok)) = self.res_in.recv() {
+        if let Ok(DaemonResponse::Ok) = self.res_in.recv() {
             spinner.set_message("Daemon shutdown in progress")
         }
 
-        if let (Ok(DaemonResponse::DaemonEvent(DaemonIpcEvent::Stopped))) = self.res_in.recv() {
+        if let Ok(DaemonResponse::DaemonEvent(DaemonIpcEvent::Stopped)) = self.res_in.recv() {
             spinner.finish_with_message("Daemon has stopped")
+        }
+    }
+
+    fn say(&self, args: Option<&ArgMatches>) {
+        let args = args.unwrap();
+        let unit_id = args.value_of("unit-id").unwrap().to_string();
+        let message = args.value_of("message").unwrap().to_string();
+
+        self.cmd_out
+            .send(DaemonCmd::SendMessage { unit_id, message })
+            .unwrap();
+
+        match self.res_in.recv() {
+            Ok(DaemonResponse::Ok) => {
+                println!("ok")
+            }
+            Ok(DaemonResponse::ServerNotFound { server_id }) => {
+                println!("unknown server id {}", server_id)
+            }
+            _ => {
+                panic!()
+            }
         }
     }
 }

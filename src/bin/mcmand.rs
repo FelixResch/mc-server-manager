@@ -3,26 +3,27 @@ use ipc_channel::ipc::IpcSender;
 use mcman::config::{DaemonConfig, ServerConfig, ServerUnitConfig, UnitConfig};
 use mcman::daemon::basic_log::BasicLogService;
 use mcman::daemon::event::{EventHandler, EventManager, EventManagerCmd};
-use mcman::daemon::paper::PaperServer;
 use mcman::daemon::{create_server, DaemonEvent, LogService, OutputState, Server};
 use mcman::ipc::install::{InstallError, PaperServerInstaller, ServerInstaller};
 use mcman::ipc::update::UpdateError::UnsupportedServerType;
 use mcman::ipc::update::{PaperServerUpdater, ServerUpdater, UpdateError};
-use mcman::ipc::{DaemonCmd, DaemonResponse, NewConnection, ServerEvent, ServerEventType, DaemonIpcEvent};
-use mcman::{files::set_socket_name, ServerInfo, ServerStatus, ServerType, Unit};
+use mcman::ipc::{
+    DaemonCmd, DaemonIpcEvent, DaemonResponse, NewConnection, ServerEvent, ServerEventType,
+};
+use mcman::{ServerInfo, ServerStatus, ServerType};
+#[cfg(feature = "systemd")]
+use sd_notify::NotifyState;
 use semver::Version;
-use serde_json::error::Category::Data;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::remove_file;
 use std::io::Read;
 use std::ops::DerefMut;
 use std::path::{Path, PathBuf};
-use std::process::{Child, exit};
+use std::process::{exit, Child};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex, RwLock};
-use std::thread::{spawn, sleep};
-use sd_notify::NotifyState;
+use std::thread::{sleep, spawn};
 use std::time::Duration;
 
 #[macro_use]
@@ -65,13 +66,12 @@ fn main() {
 
     daemon.start_thread();
 
-    if cfg!(feature = "systemd") {
-        if let Ok(true) = sd_notify::booted() {
-            if let Ok(ctrl) = std::env::var("MCMAND_CTRL") {
-                if ctrl == "systemd" {
-                    debug!("systemd detected, notifying systemd");
-                    sd_notify::notify(false, &[NotifyState::Ready]);
-                }
+    #[cfg(feature = "systemd")]
+    if let Ok(true) = sd_notify::booted() {
+        if let Ok(ctrl) = std::env::var("MCMAND_CTRL") {
+            if ctrl == "systemd" {
+                debug!("systemd detected, notifying systemd");
+                let _ = sd_notify::notify(false, &[NotifyState::Ready]);
             }
         }
     }
@@ -371,6 +371,16 @@ impl Daemon {
                 self.queue_sender.send(DaemonEvent::StopDaemon).unwrap();
                 DaemonResponse::Ok
             }
+            DaemonCmd::SendMessage { unit_id, message } => {
+                let unit = self.servers.get_mut(&unit_id);
+                match unit {
+                    Some(server) => {
+                        server.say(message);
+                        DaemonResponse::Ok
+                    }
+                    None => DaemonResponse::ServerNotFound { server_id: unit_id },
+                }
+            }
         }
     }
 
@@ -448,54 +458,63 @@ impl Daemon {
                         }
                     }
                     DaemonEvent::StopDaemon => {
-
-                        if cfg!(feature = "systemd") {
-                            if let Ok(true) = sd_notify::booted() {
-                                if let Ok(ctrl) = std::env::var("MCMAND_CTRL") {
-                                    if ctrl == "systemd" {
-                                        debug!("systemd detected, notifying systemd");
-                                        sd_notify::notify(false, &[NotifyState::Stopping]);
-                                    }
+                        #[cfg(feature = "systemd")]
+                        if let Ok(true) = sd_notify::booted() {
+                            if let Ok(ctrl) = std::env::var("MCMAND_CTRL") {
+                                if ctrl == "systemd" {
+                                    debug!("systemd detected, notifying systemd");
+                                    let _ = sd_notify::notify(false, &[NotifyState::Stopping]);
                                 }
                             }
                         }
 
-                        self.servers.iter_mut().map(|(unit_id, server)| {
-                            debug!("Stopping unit {}", unit_id);
-                            match server.status() {
-                                ServerStatus::Starting => {
-                                    if server.has_started() {
-                                        (unit_id, server.stop())
-                                    } else {
+                        self.servers
+                            .iter_mut()
+                            .map(|(unit_id, server)| {
+                                debug!("Stopping unit {}", unit_id);
+                                match server.status() {
+                                    ServerStatus::Starting => {
+                                        if server.has_started() {
+                                            (unit_id, server.stop())
+                                        } else {
+                                            (unit_id, None)
+                                        }
+                                    }
+                                    ServerStatus::Running => (unit_id, server.stop()),
+                                    ServerStatus::Updating => {
+                                        panic!("currently no strategy implemented!")
+                                    }
+                                    ServerStatus::Lockdown => {
+                                        panic!("currently no strategy implemented!")
+                                    }
+                                    _ => {
+                                        debug!("Nothing to do for unit {}", unit_id);
                                         (unit_id, None)
                                     }
                                 }
-                                ServerStatus::Running => {
-                                    (unit_id, server.stop())
+                            })
+                            .for_each(|(unit_id, child)| {
+                                if let Some(mut child) = child {
+                                    let exit_status = child.wait();
+                                    debug!(
+                                        "unit {} stopped with exit status {:?}",
+                                        unit_id, exit_status
+                                    );
                                 }
-                                ServerStatus::Updating => { panic!("currently no strategy implemented!") }
-                                ServerStatus::Lockdown => { panic!("currently no strategy implemented!") }
-                                _ => {
-                                    debug!("Nothing to do for unit {}", unit_id);
-                                    (unit_id, None)
-                                }
-                            }
-                        }).for_each(|(unit_id, mut child)| {
-                            if let Some(mut child) = child {
-                                let exit_status = child.wait();
-                                debug!("unit {} stopped with exit status {:?}", unit_id, exit_status);
-                            }
-                        });
-                        self.queue_sender.send(DaemonEvent::SendDaemonEvent(DaemonIpcEvent::Stopped));
+                            });
+                        self.queue_sender
+                            .send(DaemonEvent::SendDaemonEvent(DaemonIpcEvent::Stopped))
+                            .expect("send to own event queue");
                     }
                     DaemonEvent::SendDaemonEvent(DaemonIpcEvent::Stopped) => {
                         let mut senders = self.senders.lock().unwrap();
                         for sender in senders.values_mut() {
-                            sender.send(DaemonResponse::DaemonEvent(DaemonIpcEvent::Stopped));
+                            //ignore because sockets are closed anyway when we exit
+                            let _ =
+                                sender.send(DaemonResponse::DaemonEvent(DaemonIpcEvent::Stopped));
                         }
-                        sleep(Duration::from_millis(500));  // might not really be necessary but leave time to propagate events
+                        sleep(Duration::from_millis(500)); // might not really be necessary but leave time to propagate events
                         exit(0);
-                        unreachable!()
                     }
                 }
             }
@@ -538,10 +557,12 @@ impl Daemon {
                 match install_result {
                     Ok(server_unit_config) => {
                         let server_id = server_unit_config.unit.id.clone();
-                        daemon_queue.send(DaemonEvent::AddServerUnit {
-                            server_unit_config,
-                            unit_file: unit_file_path.unwrap().into(),
-                        });
+                        daemon_queue
+                            .send(DaemonEvent::AddServerUnit {
+                                server_unit_config,
+                                unit_file: unit_file_path.unwrap().into(),
+                            })
+                            .expect("send to daemon main event queue");
                         event_handler.raise_event(
                             server_id.as_ref(),
                             ServerEvent::InstallationComplete {
@@ -562,7 +583,7 @@ impl Daemon {
     }
 
     fn perform_installation(
-        mut event_handler: &mut EventHandler,
+        event_handler: &mut EventHandler,
         unit_id: String,
         install_path: String,
         unit_file_path: Option<String>,
@@ -600,7 +621,7 @@ impl Daemon {
                     fs::write(unit_path, config_string)
                         .map_err(|e| InstallError::WriteUnitFile(e))?;
 
-                    Ok((server_unit_config))
+                    Ok(server_unit_config)
                 } else {
                     //TODO construct path
                     Err(InstallError::DirExists)
@@ -636,10 +657,12 @@ impl Daemon {
             match update_result {
                 Ok(server_unit_config) => {
                     let server_id = server_unit_config.unit.id.clone();
-                    daemon_queue.send(DaemonEvent::AddServerUnit {
-                        server_unit_config,
-                        unit_file: unit_file_path.into(),
-                    });
+                    daemon_queue
+                        .send(DaemonEvent::AddServerUnit {
+                            server_unit_config,
+                            unit_file: unit_file_path.into(),
+                        })
+                        .expect("send to daemon main event queue");
                     event_handler.raise_event(
                         server_id.as_ref(),
                         ServerEvent::UpdateComplete {
@@ -743,6 +766,10 @@ impl DaemonServer {
         self.server.send_command(command);
     }
 
+    pub fn say(&mut self, message: String) {
+        self.send_command(format!("say {}", message))
+    }
+
     pub fn stop(&mut self) -> Option<Child> {
         if self.process.is_some() {
             self.send_command("stop".to_string());
@@ -757,7 +784,7 @@ impl DaemonServer {
         while let ServerStatus::Starting = self.status() {
             sleep(Duration::from_millis(200));
         }
-        return true
+        return true;
     }
 }
 

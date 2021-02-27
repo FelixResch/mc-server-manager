@@ -3,7 +3,6 @@
 pub mod install;
 pub mod update;
 
-use crate::ipc::install::InstallError;
 use crate::{ServerInfo, ServerType};
 use ipc_channel::ipc::IpcSender;
 use semver::Version;
@@ -41,11 +40,25 @@ pub enum DaemonCmd {
         /// If this value is `None` the client wants to receive events from all servers.
         server_ids: Option<Vec<String>>,
     },
+    /// Install a new server
     InstallServer {
+        /// Unit id of the new server
+        ///
+        /// If a unit with this name is already present, the operation will fail
         unit_id: String,
+        /// The installation path of the server. Make sure the daemon has write access to this
+        /// directory.
         install_path: String,
+        /// The path to the unit file. If this is not provided, the daemon will create a unit in its
+        /// default location.
         unit_file_path: Option<String>,
+        /// The desired version of the server software. If this version is not installable, the daemon
+        /// might choose to install a different version. Strategy ideas are discussed separately.
         server_version: Option<Version>,
+        /// The type of server to install. If the daemon is not capable to install this type of server
+        /// it might install a different but compatible server.
+        ///
+        /// E.g.:
         server_type: ServerType,
         accept_eula: bool,
         server_name: Option<String>,
@@ -55,6 +68,10 @@ pub enum DaemonCmd {
         server_version: Option<Version>,
     },
     StopDaemon,
+    SendMessage {
+        unit_id: String,
+        message: String,
+    },
 }
 
 /// Responses sent from the daemon to a client
@@ -177,7 +194,7 @@ pub enum ServerEvent {
     ServerFailed {
         server_id: String,
         error: String,
-    }
+    },
 }
 
 impl ServerEvent {

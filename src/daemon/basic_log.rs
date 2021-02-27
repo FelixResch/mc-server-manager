@@ -75,8 +75,9 @@ impl BasicLogServiceHandler {
             out_path.push("log");
             out_path.push(&server_id);
             out_path.push(format!("{}_out.log", chrono::Utc::now()));
-            create_dir_all(out_path.parent().unwrap()).unwrap();
-            let mut writer = BufWriter::new(File::create(out_path).unwrap());
+            create_dir_all(out_path.parent().expect("get parent path"))
+                .expect("create dirs to log directory");
+            let mut writer = BufWriter::new(File::create(out_path).expect("create output file"));
 
             for line in reader.lines() {
                 match line {
@@ -84,7 +85,8 @@ impl BasicLogServiceHandler {
                         writeln!(writer, "{}", line).unwrap();
                         if line.starts_with("Loading libraries") {
                             info!("server {} starting", server_id);
-                            *state.write().unwrap().deref_mut() = OutputState::Starting;
+                            *state.write().expect("lock rwlock for write").deref_mut() =
+                                OutputState::Starting;
                             event_handler.raise_event(
                                 &server_id,
                                 ServerEvent::ServerStarting {
@@ -93,7 +95,8 @@ impl BasicLogServiceHandler {
                             )
                         } else if line.contains("Done (") && line.contains("s)! For help") {
                             info!("server {} started", server_id);
-                            *state.write().unwrap().deref_mut() = OutputState::Started;
+                            *state.write().expect("lock rwlock for write").deref_mut() =
+                                OutputState::Started;
                             event_handler.raise_event(
                                 &server_id,
                                 ServerEvent::ServerStarted {
@@ -102,7 +105,8 @@ impl BasicLogServiceHandler {
                             )
                         } else if line.contains("Stopping the server") {
                             info!("server {} stopping", server_id);
-                            *state.write().unwrap().deref_mut() = OutputState::Stopping;
+                            *state.write().expect("lock rwlock for write").deref_mut() =
+                                OutputState::Stopping;
                             event_handler.raise_event(
                                 &server_id,
                                 ServerEvent::ServerStopping {
@@ -111,7 +115,8 @@ impl BasicLogServiceHandler {
                             )
                         } else if line.contains("Closing Server") {
                             info!("server {} stopped", server_id);
-                            *state.write().unwrap().deref_mut() = OutputState::Stopped;
+                            *state.write().expect("lock rwlock for write").deref_mut() =
+                                OutputState::Stopped;
                             event_handler.raise_event(
                                 &server_id,
                                 ServerEvent::ServerStopped {
@@ -120,7 +125,8 @@ impl BasicLogServiceHandler {
                             )
                         } else if line.contains("Failed to load eula.txt") {
                             warn!("eula not accepted for unit {}", server_id);
-                            *state.write().unwrap().deref_mut() = OutputState::Errored;
+                            *state.write().expect("lock rwlock for write").deref_mut() =
+                                OutputState::Errored;
                             event_handler.raise_event(
                                 &server_id,
                                 ServerEvent::ServerFailed {

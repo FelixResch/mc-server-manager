@@ -67,6 +67,8 @@ fn main() {
         client.stop_daemon(args);
     } else if cmd == "say" {
         client.say(args);
+    } else if cmd == "cmd" {
+        client.cmd(args);
     } else {
         eprintln!("unknown subcommand: {}", cmd);
     }
@@ -209,6 +211,20 @@ fn matches() -> ArgMatches<'static> {
             .arg(
                 Arg::with_name("message")
                     .help("The message you want to send")
+                    .takes_value(true)
+                    .required(true)
+            ))
+        .subcommand(SubCommand::with_name("cmd")
+            .about("Send a command directly to a server")
+            .arg(
+                Arg::with_name("unit-id")
+                    .help("The unit id of the new server")
+                    .takes_value(true)
+                    .required(true),
+            )
+            .arg(
+                Arg::with_name("command")
+                    .help("The command you want to send")
                     .takes_value(true)
                     .required(true)
             ))
@@ -572,6 +588,28 @@ impl Client {
 
         self.cmd_out
             .send(DaemonCmd::SendMessage { unit_id, message })
+            .unwrap();
+
+        match self.res_in.recv() {
+            Ok(DaemonResponse::Ok) => {
+                println!("ok")
+            }
+            Ok(DaemonResponse::ServerNotFound { server_id }) => {
+                println!("unknown server id {}", server_id)
+            }
+            _ => {
+                panic!()
+            }
+        }
+    }
+
+    fn cmd(&self, args: Option<&ArgMatches>) {
+        let args = args.unwrap();
+        let unit_id = args.value_of("unit-id").unwrap().to_string();
+        let command = args.value_of("command").unwrap().to_string();
+
+        self.cmd_out
+            .send(DaemonCmd::SendCommand { unit_id, command })
             .unwrap();
 
         match self.res_in.recv() {

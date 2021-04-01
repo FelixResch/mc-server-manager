@@ -72,6 +72,10 @@ pub enum DaemonCmd {
         unit_id: String,
         message: String,
     },
+    SendCommand {
+        unit_id: String,
+        command: String,
+    }
 }
 
 /// Responses sent from the daemon to a client

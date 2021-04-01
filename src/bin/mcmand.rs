@@ -381,6 +381,16 @@ impl Daemon {
                     None => DaemonResponse::ServerNotFound { server_id: unit_id },
                 }
             }
+            DaemonCmd::SendCommand { unit_id, command } => {
+                let unit = self.servers.get_mut(&unit_id);
+                match unit {
+                    Some(server) => {
+                        server.send_command(command);
+                        DaemonResponse::Ok
+                    }
+                    None => DaemonResponse::ServerNotFound { server_id: unit_id }
+                }
+            }
         }
     }
 

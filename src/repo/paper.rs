@@ -24,7 +24,7 @@ impl Artifact for PaperArtifact {
 
         let response = reqwest::blocking::get(
             format!(
-                "https://papermc.io/api/v2/projects/paper/versions/{}/builds/{}/download/{}",
+                "https://papermc.io/api/v2/projects/paper/versions/{}/builds/{}/downloads/{}",
                 reduced_version, build, self.download.name
             )
             .as_str(),

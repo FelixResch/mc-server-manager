@@ -74,6 +74,7 @@ pub struct PaperServerInstaller {
     event_handler: EventHandler,
     /// The id of the unit to be installed
     unit_id: String,
+    repo: PaperRepository,
 }
 
 impl PaperServerInstaller {
@@ -82,6 +83,7 @@ impl PaperServerInstaller {
         Self {
             event_handler,
             unit_id,
+            repo: PaperRepository {},
         }
     }
 }
@@ -145,10 +147,10 @@ impl ServerInstaller for PaperServerInstaller {
 
         let server_version = match server_version {
             Some(server_version) => server_version,
-            None => PaperRepository::latest_version(),
+            None => self.repo.latest_version().map_err(|e| InstallError::DownloadFailed(Box::new(e)))?,
         };
 
-        let artifact = PaperRepository::get_artifact(server_version);
+        let artifact = self.repo.get_artifact(server_version).map_err(|e| InstallError::DownloadFailed(Box::new(e)))?;
         let mut dest_path = PathBuf::new();
         dest_path.push(path);
 

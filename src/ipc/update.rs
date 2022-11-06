@@ -56,6 +56,7 @@ pub struct PaperServerUpdater {
     unit_file_path: PathBuf,
     /// an event handler which is connected to the main event manager
     event_handler: EventHandler,
+    repo: PaperRepository,
 }
 
 impl PaperServerUpdater {
@@ -65,6 +66,7 @@ impl PaperServerUpdater {
             unit_id,
             unit_file_path,
             event_handler,
+            repo: PaperRepository {},
         }
     }
 }
@@ -90,10 +92,10 @@ impl ServerUpdater for PaperServerUpdater {
         let current_version = server_config.version.clone();
         let target_artifact = match server_version {
             None => {
-                let latest_version = PaperRepository::latest_version();
-                PaperRepository::get_latest_artifact(latest_version)
+                let latest_version = self.repo.latest_version().map_err(|e| UpdateError::DownloadFailed(Box::new(e)))?;
+                self.repo.get_latest_artifact(latest_version).map_err(|e| UpdateError::DownloadFailed(Box::new(e)))?
             }
-            Some(target_version) => PaperRepository::get_artifact(target_version),
+            Some(target_version) => self.repo.get_artifact(target_version).map_err(|e| UpdateError::DownloadFailed(Box::new(e)))?,
         };
 
         if current_version >= target_artifact.version()

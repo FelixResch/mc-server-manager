@@ -19,7 +19,7 @@ interprocess = "1.0.1"
 log = "0.4.11"
 pretty_env_logger = "0.4.0"
 indicatif = "0.15.0"
-chrono = "0.4.19"
+chrono = { version = "0.4.19", features = ["serde"] }
 libc = "0.2.81"
 walkdir = "2.3.1"
 reqwest = { version = "0.11.0", features = ["blocking", "json"]}
